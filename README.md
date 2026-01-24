@@ -10,6 +10,7 @@ PowerInfer is a CPU/GPU LLM inference engine leveraging **activation locality** 
 [Project Kanban](https://github.com/orgs/SJTU-IPADS/projects/2/views/2)
 
 ## Latest News 🔥
+- [2026/1/5] We released **[Tiiny AI Pocket Lab](https://tiiny.ai/)**, the world's first pocket-size supercomputer. It runs GPT-OSS-120B (int4) locally at **20 tokens/s**. Featured at CES 2026.
 - [2025/7/27] We released [SmallThinker-21BA3B-Instruct](https://huggingface.co/PowerInfer/SmallThinker-21BA3B-Instruct) and [SmallThinker-4BA0.6B-Instruct](https://huggingface.co/PowerInfer/SmallThinker-4BA0.6B-Instruct). We also released a corresponding framework for efficient [on-device inference](./smallthinker/README.md). 
 - [2024/6/11] We are thrilled to introduce [PowerInfer-2](https://arxiv.org/abs/2406.06282), our highly optimized inference framework designed specifically for smartphones. With TurboSparse-Mixtral-47B, it achieves an impressive speed of 11.68 tokens per second, which is up to 22 times faster than other state-of-the-art frameworks.
 - [2024/6/11] We are thrilled to present [Turbo Sparse](https://arxiv.org/abs/2406.05955), our TurboSparse models for fast inference. With just $0.1M, we sparsified the original Mistral and Mixtral model to nearly 90% sparsity while maintaining superior performance! For a Mixtral-level model, our TurboSparse-Mixtral activates only **4B** parameters!
