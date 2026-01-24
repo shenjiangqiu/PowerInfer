@@ -105,7 +105,7 @@ PowerInfer requires the following dependencies:
 ### Get the Code
 
 ```bash
-git clone https://github.com/SJTU-IPADS/PowerInfer
+git clone https://github.com/Tiiny-AI/PowerInfer
 cd PowerInfer
 pip install -r requirements.txt # install Python helpers' dependencies
 ```
