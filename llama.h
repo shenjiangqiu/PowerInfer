@@ -303,6 +303,10 @@ extern "C" {
     LLAMA_API enum llama_vocab_type llama_vocab_type(const struct llama_model * model);
     LLAMA_API bool llama_use_sparse_inference(const struct llama_model * model);
 
+    // Dump sparse predictor selections (begin/end per session, auto-called per token)
+    LLAMA_API void llama_sparse_dump_begin(const char * filepath);
+    LLAMA_API void llama_sparse_dump_end(void);
+
     LLAMA_API int llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
     LLAMA_API int llama_n_embd     (const struct llama_model * model);
