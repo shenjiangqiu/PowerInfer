@@ -59,13 +59,8 @@ echo "  目标:  ${MODEL_DIR}"
 # ---- 下载 ----
 if [ -f "${MODEL_DIR}/${FILENAME}" ]; then
     echo "  已存在, 跳过: ${MODEL_DIR}/${FILENAME}"
-elif command -v huggingface-cli &>/dev/null; then
-    hf download "${HF_REPO}" "${FILENAME}" --local-dir "${MODEL_DIR}" --resume-download
 else
-    python3 -c "
-from huggingface_hub import hf_hub_download
-hf_hub_download('${HF_REPO}', '${FILENAME}', local_dir='${MODEL_DIR}', resume_download=True)
-"
+    hf download "${HF_REPO}" "${FILENAME}" --local-dir "${MODEL_DIR}"
 fi
 
 echo ""
