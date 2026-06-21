@@ -63,10 +63,7 @@ fi
 DUMP_FILE="sparse_dump_${MODEL}_${DATASET}_${SLURM_JOB_ID}.jsonl"
 
 # ---- download model if needed ----
-if [ -n "${AUTO_DOWNLOAD}" ] && [ ! -f "${MODEL_PATH}" ]; then
-    echo "=== Downloading model: ${MODEL} ==="
-    MODEL_DIR="${MODEL_DIR}" bash "${POWERINFER_DIR}/scripts/download_model.sh" "${MODEL}"
-fi
+
 
 if [ ! -f "${MODEL_PATH}" ]; then
     echo "ERROR: Model not found: ${MODEL_PATH}"
