@@ -216,7 +216,7 @@ static size_t llama_set_vram_budget(double budget_gb, int gpu_device) {
 //
 // sparse dump helper functions
 //
-static void llama_sparse_dump_begin(const char * filepath) {
+void llama_sparse_dump_begin(const char * filepath) {
     sparse_dump_fp = fopen(filepath, "w");
     if (!sparse_dump_fp) {
         LLAMA_LOG_ERROR("failed to open sparse dump file: %s\n", filepath);
@@ -227,7 +227,7 @@ static void llama_sparse_dump_begin(const char * filepath) {
     LLAMA_LOG_INFO("sparse dump enabled, writing to %s\n", filepath);
 }
 
-static void llama_sparse_dump_end() {
+void llama_sparse_dump_end() {
     if (sparse_dump_fp) {
         fclose(sparse_dump_fp);
         sparse_dump_fp = nullptr;
