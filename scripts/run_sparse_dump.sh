@@ -1,39 +1,11 @@
-#!/bin/bash
-#SBATCH --job-name=powerinfer_sparse_dump
-#SBATCH --output=logs/%j_powerinfer.out
-#SBATCH --error=logs/%j_powerinfer.err
-#SBATCH --time=04:00:00
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=16
-#SBATCH --gres=gpu:1
-#SBATCH --mem=64G
-#SBATCH --partition=mrigpu
 
-# ============================================================
-# PowerInfer 稀疏选择导出
-# 用法:
-#   sbatch scripts/run_sparse_dump.sh                            # 默认: ReluLLaMA-7B + C4 prompts
-#   sbatch --export=ALL,MODEL=ReluLLaMA-13B,DATASET=wikitext scripts/run_sparse_dump.sh
-#
-# 环境变量:
-#   MODEL         - 要下载/运行的模型 key (见 download_model.sh)
-#   MODEL_PATH    - 直接指定模型路径 (覆盖 MODEL 下载)
-#   DATASET       - wiki, c4, prompts (ChatGPT prompts), alpaca
-#   N_PREDICT     - 每 prompt 生成 token 数 (默认 128)
-#   VRAM_BUDGET   - GPU 显存预算 GB (默认 20)
-#   THRESHOLD     - predictor 阈值 (默认 0.0)
-#   AUTO_DOWNLOAD - 空字符串禁用下载
-# ============================================================
-
-set -euo pipefail
 
 # ---- config ----
 POWERINFER_DIR="${POWERINFER_DIR:-$HOME/git/PowerInfer}"
 MODEL_DIR="${MODEL_DIR:-${HF_HOME:-${POWERINFER_DIR}/hf_home}}"
 MODEL="${MODEL:-ReluLLaMA-7B}"
 DATASET="${DATASET:-c4}"
-N_PREDICT="${N_PREDICT:-128}"
+N_PREDICT="${N_PREDICT:-1}"
 VRAM_BUDGET="${VRAM_BUDGET:-20}"
 THREADS="${SLURM_CPUS_PER_TASK:-16}"
 THRESHOLD="${THRESHOLD:-0.0}"

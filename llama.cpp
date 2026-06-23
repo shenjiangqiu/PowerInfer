@@ -106,6 +106,7 @@ size_t vram_budget_bytes = 0;
 // sparse dump globals (export predictor neuron selections)
 //
 static FILE * sparse_dump_fp = nullptr;
+static FILE * sparse_dump_bin_fp = nullptr;
 static int    sparse_dump_cur_token = 0;
 static std::vector<std::pair<int, struct ggml_tensor *>> sparse_dump_idx_tensors; // (layer, idx_tensor)
 
@@ -4725,7 +4726,7 @@ static struct ggml_tensor * llm_build_ffn_sparse(
     (full_gpu ? cb : cb_outer)(idx, "mlp_pre_out");
 
     // register for dump if enabled
-    if (sparse_dump_fp != nullptr) {
+    if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
         sparse_dump_idx_tensors.push_back({il, idx});
     }
 
@@ -6962,7 +6963,8 @@ static int llama_decode_internal(
 #endif
 
     // dump sparse selection (predictor output per layer) as JSONL
-    if (sparse_dump_fp != nullptr) {
+    // also optionally dump raw float scores as binary
+    if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
         for (auto & kv : sparse_dump_idx_tensors) {
             int il = kv.first;
             ggml_tensor * idx = kv.second;
@@ -6970,21 +6972,29 @@ static int llama_decode_internal(
             int n_neurons = idx->ne[0];
             int n_batch = idx->ne[1];
             for (int b = 0; b < n_batch; b++) {
-                std::vector<int> active;
-                for (int i = 0; i < n_neurons; i++) {
-                    if (data[b * n_neurons + i] > 0.0f) active.push_back(i);
+                if (sparse_dump_fp) {
+                    std::vector<int> active;
+                    for (int i = 0; i < n_neurons; i++) {
+                        if (data[b * n_neurons + i] > 0.0f) active.push_back(i);
+                    }
+                    fprintf(sparse_dump_fp, "{\"token\":%d,\"layer\":%d,\"batch\":%d,\"total\":%d,\"active\":%d,\"indices\":[",
+                        sparse_dump_cur_token, il, b, n_neurons, (int)active.size());
+                    for (size_t a = 0; a < active.size(); a++) {
+                        fprintf(sparse_dump_fp, "%d%s", active[a], (a + 1 < active.size()) ? "," : "");
+                    }
+                    fprintf(sparse_dump_fp, "]}\n");
                 }
-                fprintf(sparse_dump_fp, "{\"token\":%d,\"layer\":%d,\"batch\":%d,\"total\":%d,\"active\":%d,\"indices\":[",
-                    sparse_dump_cur_token, il, b, n_neurons, (int)active.size());
-                for (size_t a = 0; a < active.size(); a++) {
-                    fprintf(sparse_dump_fp, "%d%s", active[a], (a + 1 < active.size()) ? "," : "");
+                if (sparse_dump_bin_fp) {
+                    int32_t hdr[4] = {sparse_dump_cur_token, il, b, n_neurons};
+                    fwrite(hdr, sizeof(int32_t), 4, sparse_dump_bin_fp);
+                    fwrite(data + b * n_neurons, sizeof(float), n_neurons, sparse_dump_bin_fp);
                 }
-                fprintf(sparse_dump_fp, "]}\n");
             }
         }
         sparse_dump_cur_token++;
         sparse_dump_idx_tensors.clear();
-        fflush(sparse_dump_fp);
+        if (sparse_dump_fp) fflush(sparse_dump_fp);
+        if (sparse_dump_bin_fp) fflush(sparse_dump_bin_fp);
     }
 
     // update the kv ring buffer
@@ -10102,6 +10112,13 @@ struct llama_context * llama_new_context_with_model(
                 LLAMA_LOG_INFO("sparse dump auto-enabled, writing to %s\n", dump_path);
             }
         }
+        const char * dump_bin_path = getenv("POWERINFER_DUMP_BINARY");
+        if (dump_bin_path && dump_bin_path[0] != '\0') {
+            sparse_dump_bin_fp = fopen(dump_bin_path, "wb");
+            if (sparse_dump_bin_fp) {
+                LLAMA_LOG_INFO("sparse binary dump enabled, writing to %s\n", dump_bin_path);
+            }
+        }
     }
 
     return ctx;
@@ -10112,6 +10129,10 @@ void llama_free(struct llama_context * ctx) {
     if (sparse_dump_fp) {
         fclose(sparse_dump_fp);
         sparse_dump_fp = nullptr;
+    }
+    if (sparse_dump_bin_fp) {
+        fclose(sparse_dump_bin_fp);
+        sparse_dump_bin_fp = nullptr;
     }
     delete ctx;
 }
