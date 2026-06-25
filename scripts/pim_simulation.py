@@ -16,14 +16,28 @@ class PimContext:
 
         self.activation_width = 4
         self.data_width = 4  # 4 bytes per float
+
+        self.up_dense = 0
+        # up.1
         self.up_total_naive_time = 0
+        # up.2
         self.up_total_asnc_time = 0
+        # up.3.1 单独
         self.up_total_iterleave_time = 0
-        self.up_total_iterleave_time_shared = 0
+        # up.3.2 共享
         self.activation_size = 4 * 1024  # 4k elements
         self.neuron_size = 11008  # elements
-        self.down_total_interproduct_time = 0
+
+        self.down_dense = 0
+        # down.1
+        self.down_total_interproduct_time_single = 0
+
+        # down 2
+        self.down_total_interproduct_time_two = 0
+
+        # down.3.1 方法一
         self.down_total_rowwise_bitserial_time_method_1 = 0
+        # down.3.2 方法二
         self.down_total_rowwise_bitserial_time_method_2 = 0
 
         # stats
@@ -55,9 +69,14 @@ class PimContext:
         # 1. naive layout
         # 4k in a bank, 11k across the banks
         naive_single_neuron_size = self.activation_size * self.data_width
+
         rows_per_bank = naive_single_neuron_size // self.page_size
         assert (naive_single_neuron_size % self.page_size) == 0, (
             "naive_single_neuron_size must be multiple of page_size"
+        )
+
+        self.up_dense += (
+            (self.neuron_size + self.banks - 1) // self.banks * rows_per_bank
         )
 
         valid_rows = set()
@@ -83,65 +102,55 @@ class PimContext:
         else:
             set_1 = set(self.last_round_index)
             set_2 = set(indices)
-            only_in_set_2 = set_2 - set_1
-            only_in_set_1 = set_1 - set_2
-            shared = set_1 & set_2
+            all_set = set_1 | set_2
 
             rows_per_each_bank = [0 for _i in range(self.banks)]
-            rows_per_each_bank_shared = [0 for _i in range(self.banks)]
-            for i in only_in_set_1:
+            for i in all_set:
                 bank_id = i % self.banks
                 rows_per_each_bank[bank_id] += 1
-            for i in only_in_set_2:
-                bank_id = i % self.banks
-                rows_per_each_bank[bank_id] += 1
-            for i in shared:
-                bank_id = i % self.banks
-                rows_per_each_bank_shared[bank_id] += 1
 
             self.up_total_iterleave_time += max(rows_per_each_bank) * rows_per_bank
-            self.up_total_iterleave_time_shared += (
-                max(rows_per_each_bank_shared) * rows_per_bank
-            )
+
             self.last_round_index = None
 
         # down gate:
+
+        self.down_dense += (
+            (self.neuron_size * self.data_width + self.page_size - 1) // self.page_size
+        ) * (self.activation_size // self.banks)
         # inner product:
         # 在做 inner projection 的时候,所有的 output-channel 都是一致的,所以视角只要看到一个bank 就好了
         # 11k在一起, 4k 在banks上均匀分布,11k分布在44行,从中取消一些行不要
         sinle_neuron_size = self.neuron_size * self.data_width  # 44k
+
         rows_per_bank = (sinle_neuron_size + self.page_size - 1) // self.page_size  # 44
         # 只有一整个 row 都被跳过,这个 row 才不需要加载
         row_index_count = set()
         for i in indices:
             row_index_count.add(i * self.data_width // self.page_size)
+
         # 最多44
-        self.down_total_interproduct_time += len(row_index_count) * (
+        self.down_total_interproduct_time_single += len(row_index_count) * (
             self.activation_size // self.banks
         )
 
         # 如果两个batch 同时进行,那么 index 一样的可以共享rowbuffer read,但是无法共享计算,
         row_index_count_set_1 = set()
         row_index_count_set_2 = set()
-        row_index_count_set_shared = set()
         if self.last_round_index_down is None:
             self.last_round_index_down = indices
         else:
             for i in self.last_round_index_down:
                 row_index_count_set_1.add(i * self.data_width // self.page_size)
+
             for i in indices:
                 row_index_count_set_2.add(i * self.data_width // self.page_size)
 
-            row_index_count_set_shared = row_index_count_set_1 & row_index_count_set_2
-            row_index_count_set_1 = row_index_count_set_1 - row_index_count_set_shared
-            row_index_count_set_2 = row_index_count_set_2 - row_index_count_set_shared
+            all_set = row_index_count_set_1 | row_index_count_set_2
 
-            self.down_total_interproduct_time += len(row_index_count_set_1) * (
+            self.down_total_interproduct_time_two += (len(all_set)) * (
                 self.activation_size // self.banks
-            ) + len(row_index_count_set_2) * (self.activation_size // self.banks)
-            self.down_total_interproduct_time_shared += len(
-                row_index_count_set_shared
-            ) * (self.activation_size // self.banks)
+            )
 
             self.last_round_index_down = None
 
@@ -153,26 +162,31 @@ class PimContext:
         # 方法二: 4K 放不同的16个bank, 那么 bank 被分成banks/16 个组, 11k 放到不同的组上, 每行有 1 * 11k/(banks/16),
         # 每个bank 计算完成后得到一行,需要完成 11k/(banks/16) 次累加: 优点: 每个bank上的11k 分布比较多: 11*16, 可能更平均
 
-        # 方法三: 如果是batch =2, 在进行row-wise的时候如果两个index不同,在同一个bank上,那么就需要计算两次,如果index相同,那么理论上也要计算两次
+        # 方法三: 如果是batch = 2, 在进行row-wise的时候如果两个index不同,在同一个bank上,那么就需要计算两次,如果index相同,那么理论上也要计算两次
         method_1_each_bank_tasks = [0 for _i in range(self.banks)]
+        rows_per_bank = (self.activation_size * self.data_width) // self.page_size
+
         for i in indices:
             bank_id = i % self.banks
             method_1_each_bank_tasks[bank_id] += 1
-        self.down_total_rowwise_bitserial_time_method_1 += max(
-            method_1_each_bank_tasks
-        ) * (self.activation_size // self.banks)
+        self.down_total_rowwise_bitserial_time_method_1 += (
+            max(method_1_each_bank_tasks) * rows_per_bank
+        )
 
-        method_2_each_bank_tasks = [0 for _i in range(self.banks // 16)]
+        rows_per_bank = 1
+        group_size = self.activation_size * self.data_width // self.page_size  # 16
+
+        method_2_each_bank_tasks = [0 for _i in range(self.banks // group_size)]
         for i in indices:
-            bank_id = i % (self.banks // 16)
+            bank_id = i % (self.banks // group_size)
             method_2_each_bank_tasks[bank_id] += 1
-        self.down_total_rowwise_bitserial_time_method_2 += max(
-            method_2_each_bank_tasks
-        ) * (self.activation_size // self.banks)
-
+        self.down_total_rowwise_bitserial_time_method_2 += (
+            max(method_2_each_bank_tasks) * rows_per_bank
+        )
         pass
-    
-    
+
+        # 方法3: 如果batch = 2 似乎无法共享,但是可以考虑 bitlevel 共享
+
     def finish(self):
         if self.last_round_index is not None:
             rows_per_each_bank = [0 for _i in range(self.banks)]
@@ -180,6 +194,7 @@ class PimContext:
                 bank_id = i % self.banks
                 rows_per_each_bank[bank_id] += 1
             rows_per_bank = (self.activation_size * self.data_width) // self.page_size
+
             self.up_total_iterleave_time += max(rows_per_each_bank) * rows_per_bank
             self.last_round_index = None
 
@@ -187,20 +202,25 @@ class PimContext:
             row_index_count_set_1 = set()
             for i in self.last_round_index_down:
                 row_index_count_set_1.add(i * self.data_width // self.page_size)
+
             self.down_total_interproduct_time += len(row_index_count_set_1) * (
                 self.activation_size // self.banks
             )
             self.last_round_index_down = None
-    
+
     def save_result_json(self, output_file):
         self.finish()
         result = {
             "total_records": self.total_records,
             "total_neurons": self.total_neurons,
             "total_selected_neurons": self.total_selected_neurons,
+            "up_dense": self.up_dense,
+            "down_dense": self.down_dense,
+            "up_total_naive_time": self.up_total_naive_time,
             "up_total_asnc_time": self.up_total_asnc_time,
             "up_total_iterleave_time": self.up_total_iterleave_time,
-            "down_total_interproduct_time": self.down_total_interproduct_time,
+            "down_total_interproduct_time_single": self.down_total_interproduct_time_single,
+            "down_total_interproduct_time_two": self.down_total_interproduct_time_two,
             "down_total_rowwise_bitserial_time_method_1": self.down_total_rowwise_bitserial_time_method_1,
             "down_total_rowwise_bitserial_time_method_2": self.down_total_rowwise_bitserial_time_method_2,
         }
@@ -235,21 +255,23 @@ def main():
 
         for name in bins:
             bin_path = os.path.join(args.input, name)
-            jsonl_path = os.path.join(args.input, name.rsplit(".bin", 1)[0] + ".jsonl")
             records = read_binary(bin_path)
             for r in records:
                 token, layer, batch, n_neurons, scores = r
                 active = (scores > args.threshold).nonzero()[0].tolist()
-                record = {
-                    "token": token,
-                    "layer": layer,
-                    "batch": batch,
-                    "total": n_neurons,
-                    "active": len(active),
-                    "indices": active,
-                }
+
                 context.compute_time(n_neurons, len(active), active)
 
+    else:
+        records = read_binary(args.input)
+        for r in records:
+            token, layer, batch, n_neurons, scores = r
+            active = (scores > args.threshold).nonzero()[0].tolist()
 
-def compute_time(context, total, active, indices):
-    pass
+            context.compute_time(n_neurons, len(active), active)
+
+    context.save_result_json(args.output or sys.stdout)
+
+
+if __name__ == "__main__":
+    main()
