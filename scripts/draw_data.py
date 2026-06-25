@@ -27,14 +27,14 @@ SINGLES = [
 
 # hardcoded: stacked pair prefixes → display name
 PAIRS = {
+    "up_dense": "up dense",
     "up_total_naive_time": "up naive",
     "up_total_asnc_time": "up async",
     "up_total_iterleave_time": "up interleave",
+    "down_dense": "down dense",
     "down_total_interproduct_time_single": "down single",
     "down_total_interproduct_time_two": "down two",
-    "up_dense": "up dense",
-    "down_dense": "down dense",
-    
+
 }
 
 # keys that are visually capped (short bar + number label)

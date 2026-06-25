@@ -66,7 +66,6 @@ class PimContext:
         2. row_wise- bitserial: 11k 个 4k+4k, 4k 放在一起(不行, row 是破坏性的都,无法写回)
         """
 
-        # 1. naive layout
         # 4k in a bank, 11k across the banks
         naive_single_neuron_size = self.activation_size * self.data_width
 
@@ -78,21 +77,30 @@ class PimContext:
         self.up_dense += (
             (self.neuron_size + self.banks - 1) // self.banks * rows_per_bank
         )
+        # 1. naive layout:所有的bank,只要有一个row 被激活,那么所有的bank 都需要激活这个row,所以只要统计所有的row,然后取max
 
-        valid_rows = set()
+        valid_rows = [set() for _ in range(32)]
         for i in indices:
-            valid_rows.add(i // self.banks)
+            channel_id = (i // 32) % 32
+            bank_id = i % 32
+            row_id = i // 32 // 32
+            valid_rows[channel_id].add(row_id)
             pass
-        self.up_total_naive_time += len(valid_rows) * rows_per_bank
+        each_channel_rows = [len(s) for s in valid_rows]
+        max_rows = max(each_channel_rows)
+        self.up_total_naive_time += max_rows * rows_per_bank
 
-        # 2. async layout
+        # 2. async layout: 每个bank可以激活自己的row
         # each bank can activate different rows, so count the number of rows for each bank, and take the max
-        rows_per_each_bank = [0 for _i in range(self.banks)]
+        rows_per_each_bank = [[0 for _i in range(32)] for _ in range(32)]
         for i in indices:
-            bank_id = i % self.banks
-            rows_per_each_bank[bank_id] += 1
+            channel_id = (i // 32) % 32
+            bank_id = i % 32
+            rows_per_each_bank[channel_id][bank_id] += 1
+        each_channel_max_rows = [max(s) for s in rows_per_each_bank]
+        max_rows = max(each_channel_max_rows)
 
-        self.up_total_asnc_time += max(rows_per_each_bank) * rows_per_bank
+        self.up_total_asnc_time += max_rows * rows_per_bank
 
         # 3. iterleave layout
         # there are two batch in parallel, so we can merge the same index do the same time, for diffrent index, if they belong to the same bank,
