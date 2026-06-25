@@ -102,3 +102,6 @@ tests/test-tokenizer-1-bpe
 build-info.h
 dump_th05.jsonl
 dump.json
+
+/dumpbins
+*.jsonl

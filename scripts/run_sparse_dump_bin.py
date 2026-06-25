@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -56,7 +57,7 @@ def resolve_model(key: str, model_dir: str) -> str:
 def ensure_dataset(name: str, max_prompts: int) -> Path:
     datasets_dir = POWERINFER_DIR / "datasets"
     datasets_dir.mkdir(parents=True, exist_ok=True)
-    prompt_file = datasets_dir / f"{name}_prompts.txt"
+    prompt_file = datasets_dir / f"{name}_prompts.jsonl"
 
     if prompt_file.exists():
         return prompt_file
@@ -64,7 +65,7 @@ def ensure_dataset(name: str, max_prompts: int) -> Path:
     handler = DATASET_HANDLERS.get(name)
     if handler is None:
         print(f"Unknown dataset '{name}', writing default prompt", file=sys.stderr)
-        prompt_file.write_text("once upon a time")
+        prompt_file.write_text(json.dumps("once upon a time") + "\n")
         return prompt_file
 
     print(f"=== Downloading dataset: {name} ===", file=sys.stderr)
@@ -133,7 +134,11 @@ def main():
 
             print(f"=== Model: {model_short}  Dataset: {ds} ===")
 
-            prompts = prompt_file.read_text().strip().split("\n")
+            prompts = []
+            for line in prompt_file.read_text().strip().split("\n"):
+                line = line.strip()
+                if line:
+                    prompts.append(json.loads(line))
             for i, prompt in enumerate(prompts, 1):
                 if not prompt.strip():
                     continue
@@ -153,7 +158,8 @@ def main():
 
                 proc = subprocess.run(
                     [str(main_bin), "-m", model_path, "-p", prompt,
-                     "-n", str(args.n_predict), "-t", str(args.threads)],
+                     "-n", str(args.n_predict), "-t", str(args.threads),
+                     "-c", "2048"],
                     env=env,
                     capture_output=True,
                     text=True,
