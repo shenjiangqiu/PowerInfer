@@ -171,6 +171,7 @@ class PimContext:
         # 每个bank 计算完成后得到一行,需要完成 11k/(banks/16) 次累加: 优点: 每个bank上的11k 分布比较多: 11*16, 可能更平均
 
         # 方法三: 如果是batch = 2, 在进行row-wise的时候如果两个index不同,在同一个bank上,那么就需要计算两次,如果index相同,那么理论上也要计算两次
+
         method_1_each_bank_tasks = [0 for _i in range(self.banks)]
         rows_per_bank = (self.activation_size * self.data_width) // self.page_size
 
