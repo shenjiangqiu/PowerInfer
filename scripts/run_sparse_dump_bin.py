@@ -18,21 +18,21 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 POWERINFER_DIR = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
-from download_dataset import download_wiki, download_c4, download_alpaca, download_chatgpt
+from download_dataset import (
+    download_wiki,
+    download_c4,
+    download_alpaca,
+    download_chatgpt,
+)
 
 MODEL_MAP = {
     "ReluLLaMA-7B": (
-        os.path.expanduser(
-            "~/.cache/huggingface/hub/models--PowerInfer--ReluLLaMA-7B-PowerInfer-GGUF"
-            "/snapshots/17b5d8a28f0377e05758a74989ce9326f5905860/"
-        )
+        "/home/sjq/sjq10t/hfhome/hub/models--PowerInfer--ReluLLaMA-7B-PowerInfer-GGUF/snapshots/17b5d8a28f0377e05758a74989ce9326f5905860/"
         + "llama-7b-relu.powerinfer.gguf"
     ),
-    "ReluLLaMA-13B": lambda d: f"{d}/prosparse-llama-2-13b.powerinfer.gguf",
-    "ReluFalcon-40B": lambda d: f"{d}/falcon-40b-relu.powerinfer.gguf",
-    "OPT-6.7B": lambda d: f"{d}/opt-6.7b-relu.powerinfer.gguf",
-    "OPT-30B": lambda d: f"{d}/opt-30b-relu.powerinfer.gguf",
-    "Bamboo-7B": lambda d: f"{d}/bamboo-7b-v0.1.gguf",
+    "Bamboo-7B": "/home/sjq/sjq10t/hfhome/hub/models--PowerInfer--Bamboo-base-v0.1-gguf/snapshots/da6530bc54af41183383df7923701f8c6333b3e7/bamboo-7b-v0.1.powerinfer.gguf",
+    "Bamboo-dpo-7B": "/home/sjq/sjq10t/hfhome/hub/models--PowerInfer--Bamboo-DPO-v0.1-gguf/snapshots/c3847e080bd8664f2ea299400f74665ca5b13824/bamboo-7b-dpo-v0.1.powerinfer.gguf",
+    "ProSparse-llama-7b": "/home/sjq/sjq10t/hfhome/hub/models--PowerInfer--ProSparse-LLaMA-2-7B-GGUF/snapshots/72f4a41882ede0cbc745150559b4db268a142b36/prosparse-llama-2-7b-clip15.gguf",
 }
 
 DATASET_HANDLERS = {
@@ -74,32 +74,45 @@ def ensure_dataset(name: str, max_prompts: int) -> Path:
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Batch PowerInfer binary sparse dump")
+    parser = argparse.ArgumentParser(description="Batch PowerInfer binary sparse dump")
     parser.add_argument(
-        "--models", default="ReluLLaMA-7B",
-        help="Comma-separated model keys or paths (default: ReluLLaMA-7B)")
+        "--models",
+        default="ReluLLaMA-7B",
+        help="Comma-separated model keys or paths (default: ReluLLaMA-7B)",
+    )
     parser.add_argument(
-        "--datasets", default="wiki",
-        help="Comma-separated datasets: wiki,c4,alpaca,chatgpt (default: wiki)")
+        "--datasets",
+        default="wiki",
+        help="Comma-separated datasets: wiki,c4,alpaca,chatgpt (default: wiki)",
+    )
     parser.add_argument(
-        "--max-prompts", type=int, default=100,
-        help="Max prompts per dataset (default: 100)")
+        "--max-prompts",
+        type=int,
+        default=100,
+        help="Max prompts per dataset (default: 100)",
+    )
     parser.add_argument(
-        "--n-predict", type=int, default=1,
-        help="Tokens to generate per prompt (default: 1)")
+        "--n-predict",
+        type=int,
+        default=1,
+        help="Tokens to generate per prompt (default: 1)",
+    )
     parser.add_argument(
-        "--threads", type=int, default=20,
-        help="CPU threads (default: 20)")
+        "--threads", type=int, default=20, help="CPU threads (default: 20)"
+    )
     parser.add_argument(
-        "--dumpdir", default=None,
-        help="Output directory for binary dumps (default: <repo>/dumpbins)")
+        "--dumpdir",
+        default=None,
+        help="Output directory for binary dumps (default: <repo>/dumpbins)",
+    )
     parser.add_argument(
-        "--main-bin", default=None,
-        help="Path to main binary (default: <repo>/build_release/bin/main)")
+        "--main-bin",
+        default=None,
+        help="Path to main binary (default: <repo>/build_release/bin/main)",
+    )
     parser.add_argument(
-        "--model-dir", default=None,
-        help="Directory containing model files")
+        "--model-dir", default=None, help="Directory containing model files"
+    )
     args = parser.parse_args()
 
     powerinfer_dir = POWERINFER_DIR
@@ -157,9 +170,19 @@ def main():
                 env["POWERINFER_DUMP_BINARY"] = str(dumpfile)
 
                 proc = subprocess.run(
-                    [str(main_bin), "-m", model_path, "-p", prompt,
-                     "-n", str(args.n_predict), "-t", str(args.threads),
-                     "-c", "2048"],
+                    [
+                        str(main_bin),
+                        "-m",
+                        model_path,
+                        "-p",
+                        prompt,
+                        "-n",
+                        str(args.n_predict),
+                        "-t",
+                        str(args.threads),
+                        "-c",
+                        "2048",
+                    ],
                     env=env,
                     capture_output=True,
                     text=True,
@@ -168,7 +191,9 @@ def main():
 
                 if proc.returncode != 0:
                     print(f"    ** FAILED (rc={proc.returncode}) **")
-                    last_line = proc.stderr.strip().split("\n")[-1] if proc.stderr else ""
+                    last_line = (
+                        proc.stderr.strip().split("\n")[-1] if proc.stderr else ""
+                    )
                     if last_line:
                         print(f"    {last_line[:200]}")
                     failed += 1
