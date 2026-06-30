@@ -105,3 +105,4 @@ dump.json
 
 /dumpbins
 *.jsonl
+out.json

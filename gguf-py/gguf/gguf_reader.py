@@ -22,6 +22,7 @@ from gguf.constants import (
     GGML_QUANT_SIZES,
     GGUF_DEFAULT_ALIGNMENT,
     GGUF_MAGIC,
+    GGUF_POWERINFER_MAGIC,
     GGUF_VERSION,
     GGMLQuantizationType,
     GGUFValueType,
@@ -84,8 +85,9 @@ class GGUFReader:
     def __init__(self, path: os.PathLike[str] | str, mode: Literal['r' | 'r+' | 'c'] = 'r'):
         self.data = np.memmap(path, mode = mode)
         offs = 0
-        if self._get(offs, np.uint32, override_order = '<')[0] != GGUF_MAGIC:
-            raise ValueError('GGUF magic invalid')
+        file_magic = self._get(offs, np.uint32, override_order = '<')[0]
+        if file_magic not in (GGUF_MAGIC, GGUF_POWERINFER_MAGIC):
+            raise ValueError(f'GGUF magic invalid: 0x{file_magic:08X}')
         offs += 4
         temp_version = self._get(offs, np.uint32)
         if temp_version[0] & 65535 == 0:

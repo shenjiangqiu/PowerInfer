@@ -9,6 +9,7 @@ from typing import Any
 #
 
 GGUF_MAGIC             = 0x46554747  # "GGUF"
+GGUF_POWERINFER_MAGIC  = 0x49525750  # "PWRI"
 GGUF_VERSION           = 3
 GGUF_DEFAULT_ALIGNMENT = 32
 
@@ -489,6 +490,9 @@ GGML_QUANT_SIZES = {
     GGMLQuantizationType.Q5_K: (256, 2 + 2 + QK_K // 2 + QK_K // 8 + 12),
     GGMLQuantizationType.Q6_K: (256, 2 + QK_K // 2 + QK_K // 4 + QK_K // 16),
     GGMLQuantizationType.Q8_K: (256, 4 + QK_K + QK_K // 8),
+    GGMLQuantizationType.I8:   (1, 1),
+    GGMLQuantizationType.I16:  (1, 2),
+    GGMLQuantizationType.I32:  (1, 4),
 }
 
 
