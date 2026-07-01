@@ -6,7 +6,7 @@ import struct
 import sys
 
 
-from convert_sparse_dump import read_binary
+from .convert_sparse_dump import read_binary
 
 
 class PimContext:
@@ -238,7 +238,9 @@ class PimContext:
             json.dump(result, f, indent=4)
 
     pass
-
+def parse_index_histogram(histogram:list[int], active_indices:list[int] ):
+    
+    pass
 
 def main():
     parser = argparse.ArgumentParser(
