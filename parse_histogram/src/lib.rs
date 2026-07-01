@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufReader, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
@@ -100,10 +100,72 @@ impl<R: Read> Iterator for RecordIter<R> {
     }
 }
 
-pub fn open(path: impl AsRef<Path>) -> Result<RecordIter<BufReader<File>>> {
+/// Lazily chains multiple .bin files into a single record iterator.
+/// Only one file is open at a time.
+pub struct ChainFileIter {
+    paths: std::vec::IntoIter<PathBuf>,
+    current: Option<RecordIter<BufReader<File>>>,
+}
+
+impl Iterator for ChainFileIter {
+    type Item = Result<Record>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(ref mut iter) = self.current {
+                match iter.next() {
+                    Some(record) => return Some(record),
+                    None => {
+                        // current file exhausted, drop it (closes file handle)
+                        self.current = None;
+                    }
+                }
+            }
+            // open next file
+            let path = self.paths.next()?;
+            match open_single(&path) {
+                Ok(iter) => self.current = Some(iter),
+                Err(e) => return Some(Err(e)),
+            }
+        }
+    }
+}
+
+/// Open a single .bin file.
+fn open_single(path: impl AsRef<Path>) -> Result<RecordIter<BufReader<File>>> {
     let file = File::open(path.as_ref())
         .with_context(|| format!("failed to open {}", path.as_ref().display()))?;
     Ok(RecordIter::new(BufReader::new(file)))
+}
+
+/// Open a .bin file or a directory of .bin files.
+/// If path is a directory, all .bin files inside are lazily chained —
+/// only one file is opened at a time.
+pub fn open(path: impl AsRef<Path>) -> Result<ChainFileIter> {
+    let path = path.as_ref();
+    let paths: Vec<PathBuf> = if path.is_dir() {
+        let mut bin_files: Vec<PathBuf> = Vec::new();
+        for entry in fs::read_dir(path)
+            .with_context(|| format!("failed to read directory {}", path.display()))?
+        {
+            let entry = entry?;
+            let p = entry.path();
+            if p.extension().map_or(false, |ext| ext == "bin") {
+                bin_files.push(p);
+            }
+        }
+        if bin_files.is_empty() {
+            anyhow::bail!("no .bin files found in {}", path.display());
+        }
+        bin_files.sort();
+        bin_files
+    } else {
+        vec![path.to_path_buf()]
+    };
+    Ok(ChainFileIter {
+        paths: paths.into_iter(),
+        current: None,
+    })
 }
 
 pub type LayerHistograms = HashMap<i32, Vec<u64>>;
