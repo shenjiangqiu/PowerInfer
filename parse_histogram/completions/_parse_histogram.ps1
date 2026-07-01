@@ -33,6 +33,7 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('print', 'print', [CompletionResultType]::ParameterValue, 'Print info of the first N records')
             [CompletionResult]::new('sparsity', 'sparsity', [CompletionResultType]::ParameterValue, 'Compute sparsity statistics (overall and per-layer)')
             [CompletionResult]::new('simulate', 'simulate', [CompletionResultType]::ParameterValue, 'Run PIM simulation with given activation threshold')
+            [CompletionResult]::new('to-cycle', 'to-cycle', [CompletionResultType]::ParameterValue, 'Convert simulation stats to cycle counts (auto-runs simulation if needed)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -58,8 +59,17 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
         'parse_histogram;simulate' {
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Activation threshold (default: 0.0)')
             [CompletionResult]::new('--threshold', '--threshold', [CompletionResultType]::ParameterName, 'Activation threshold (default: 0.0)')
-            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (default: stdout)')
-            [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (default: stdout)')
+            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (auto-derived if omitted)')
+            [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (auto-derived if omitted)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
+        'parse_histogram;to-cycle' {
+            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Activation threshold for simulation (default: 0.0)')
+            [CompletionResult]::new('--threshold', '--threshold', [CompletionResultType]::ParameterName, 'Activation threshold for simulation (default: 0.0)')
+            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Save cycle result as JSON (default: stdout)')
+            [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Save cycle result as JSON (default: stdout)')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -69,6 +79,7 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('print', 'print', [CompletionResultType]::ParameterValue, 'Print info of the first N records')
             [CompletionResult]::new('sparsity', 'sparsity', [CompletionResultType]::ParameterValue, 'Compute sparsity statistics (overall and per-layer)')
             [CompletionResult]::new('simulate', 'simulate', [CompletionResultType]::ParameterValue, 'Run PIM simulation with given activation threshold')
+            [CompletionResult]::new('to-cycle', 'to-cycle', [CompletionResultType]::ParameterValue, 'Convert simulation stats to cycle counts (auto-runs simulation if needed)')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -82,6 +93,9 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             break
         }
         'parse_histogram;help;simulate' {
+            break
+        }
+        'parse_histogram;help;to-cycle' {
             break
         }
         'parse_histogram;help;help' {

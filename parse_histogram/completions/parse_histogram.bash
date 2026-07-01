@@ -31,6 +31,9 @@ _parse_histogram() {
             parse_histogram,sparsity)
                 cmd="parse_histogram__subcmd__sparsity"
                 ;;
+            parse_histogram,to-cycle)
+                cmd="parse_histogram__subcmd__to__subcmd__cycle"
+                ;;
             parse_histogram__subcmd__help,help)
                 cmd="parse_histogram__subcmd__help__subcmd__help"
                 ;;
@@ -46,6 +49,9 @@ _parse_histogram() {
             parse_histogram__subcmd__help,sparsity)
                 cmd="parse_histogram__subcmd__help__subcmd__sparsity"
                 ;;
+            parse_histogram__subcmd__help,to-cycle)
+                cmd="parse_histogram__subcmd__help__subcmd__to__subcmd__cycle"
+                ;;
             *)
                 ;;
         esac
@@ -53,7 +59,7 @@ _parse_histogram() {
 
     case "${cmd}" in
         parse_histogram)
-            opts="-f -l -b -h --file --layer --batch --help histogram print sparsity simulate help"
+            opts="-f -l -b -h --file --layer --batch --help histogram print sparsity simulate to-cycle help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -91,7 +97,7 @@ _parse_histogram() {
             return 0
             ;;
         parse_histogram__subcmd__help)
-            opts="histogram print sparsity simulate help"
+            opts="histogram print sparsity simulate to-cycle help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -161,6 +167,20 @@ _parse_histogram() {
             return 0
             ;;
         parse_histogram__subcmd__help__subcmd__sparsity)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        parse_histogram__subcmd__help__subcmd__to__subcmd__cycle)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -255,6 +275,36 @@ _parse_histogram() {
                 return 0
             fi
             case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        parse_histogram__subcmd__to__subcmd__cycle)
+            opts="-t -o -h --threshold --output --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --threshold)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -t)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --output)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;

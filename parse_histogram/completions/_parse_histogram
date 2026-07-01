@@ -58,8 +58,18 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-t+[Activation threshold (default\: 0.0)]:THRESHOLD:_default' \
 '--threshold=[Activation threshold (default\: 0.0)]:THRESHOLD:_default' \
-'-o+[Save result as JSON to this file (default\: stdout)]:OUTPUT:_files' \
-'--output=[Save result as JSON to this file (default\: stdout)]:OUTPUT:_files' \
+'-o+[Save result as JSON to this file (auto-derived if omitted)]:OUTPUT:_files' \
+'--output=[Save result as JSON to this file (auto-derived if omitted)]:OUTPUT:_files' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
+(to-cycle)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Activation threshold for simulation (default\: 0.0)]:THRESHOLD:_default' \
+'--threshold=[Activation threshold for simulation (default\: 0.0)]:THRESHOLD:_default' \
+'-o+[Save cycle result as JSON (default\: stdout)]:OUTPUT:_files' \
+'--output=[Save cycle result as JSON (default\: stdout)]:OUTPUT:_files' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -92,6 +102,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(to-cycle)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -112,6 +126,7 @@ _parse_histogram_commands() {
 'print:Print info of the first N records' \
 'sparsity:Compute sparsity statistics (overall and per-layer)' \
 'simulate:Run PIM simulation with given activation threshold' \
+'to-cycle:Convert simulation stats to cycle counts (auto-runs simulation if needed)' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'parse_histogram commands' commands "$@"
@@ -123,6 +138,7 @@ _parse_histogram__subcmd__help_commands() {
 'print:Print info of the first N records' \
 'sparsity:Compute sparsity statistics (overall and per-layer)' \
 'simulate:Run PIM simulation with given activation threshold' \
+'to-cycle:Convert simulation stats to cycle counts (auto-runs simulation if needed)' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'parse_histogram help commands' commands "$@"
@@ -152,6 +168,11 @@ _parse_histogram__subcmd__help__subcmd__sparsity_commands() {
     local commands; commands=()
     _describe -t commands 'parse_histogram help sparsity commands' commands "$@"
 }
+(( $+functions[_parse_histogram__subcmd__help__subcmd__to-cycle_commands] )) ||
+_parse_histogram__subcmd__help__subcmd__to-cycle_commands() {
+    local commands; commands=()
+    _describe -t commands 'parse_histogram help to-cycle commands' commands "$@"
+}
 (( $+functions[_parse_histogram__subcmd__histogram_commands] )) ||
 _parse_histogram__subcmd__histogram_commands() {
     local commands; commands=()
@@ -171,6 +192,11 @@ _parse_histogram__subcmd__simulate_commands() {
 _parse_histogram__subcmd__sparsity_commands() {
     local commands; commands=()
     _describe -t commands 'parse_histogram sparsity commands' commands "$@"
+}
+(( $+functions[_parse_histogram__subcmd__to-cycle_commands] )) ||
+_parse_histogram__subcmd__to-cycle_commands() {
+    local commands; commands=()
+    _describe -t commands 'parse_histogram to-cycle commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_parse_histogram" ]; then

@@ -30,6 +30,7 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
             cand print 'Print info of the first N records'
             cand sparsity 'Compute sparsity statistics (overall and per-layer)'
             cand simulate 'Run PIM simulation with given activation threshold'
+            cand to-cycle 'Convert simulation stats to cycle counts (auto-runs simulation if needed)'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'parse_histogram;histogram'= {
@@ -51,8 +52,16 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
         &'parse_histogram;simulate'= {
             cand -t 'Activation threshold (default: 0.0)'
             cand --threshold 'Activation threshold (default: 0.0)'
-            cand -o 'Save result as JSON to this file (default: stdout)'
-            cand --output 'Save result as JSON to this file (default: stdout)'
+            cand -o 'Save result as JSON to this file (auto-derived if omitted)'
+            cand --output 'Save result as JSON to this file (auto-derived if omitted)'
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
+        &'parse_histogram;to-cycle'= {
+            cand -t 'Activation threshold for simulation (default: 0.0)'
+            cand --threshold 'Activation threshold for simulation (default: 0.0)'
+            cand -o 'Save cycle result as JSON (default: stdout)'
+            cand --output 'Save cycle result as JSON (default: stdout)'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -61,6 +70,7 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
             cand print 'Print info of the first N records'
             cand sparsity 'Compute sparsity statistics (overall and per-layer)'
             cand simulate 'Run PIM simulation with given activation threshold'
+            cand to-cycle 'Convert simulation stats to cycle counts (auto-runs simulation if needed)'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'parse_histogram;help;histogram'= {
@@ -70,6 +80,8 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
         &'parse_histogram;help;sparsity'= {
         }
         &'parse_histogram;help;simulate'= {
+        }
+        &'parse_histogram;help;to-cycle'= {
         }
         &'parse_histogram;help;help'= {
         }

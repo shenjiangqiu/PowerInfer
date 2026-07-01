@@ -42,7 +42,16 @@ pub enum Commands {
         /// Activation threshold (default: 0.0)
         #[arg(short = 't', long, default_value = "0.0")]
         threshold: f32,
-        /// Save result as JSON to this file (default: stdout)
+        /// Save result as JSON to this file (auto-derived if omitted)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Convert simulation stats to cycle counts (auto-runs simulation if needed)
+    ToCycle {
+        /// Activation threshold for simulation (default: 0.0)
+        #[arg(short = 't', long, default_value = "0.0")]
+        threshold: f32,
+        /// Save cycle result as JSON (default: stdout)
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
