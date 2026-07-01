@@ -4,6 +4,7 @@ use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use serde::Serialize;
 
 #[derive(Debug, Clone)]
 pub struct Record {
@@ -321,6 +322,300 @@ pub fn print_sparsity(stats: &SparsityStats) {
         println!("{}\t{}\t{}\t{:.4}", layer, ls.total_neurons, ls.activated_neurons, ls.sparsity());
     }
 }
+
+// ── PIM Simulation ───────────────────────────────────────────────
+
+/// Fixed hardware parameters for PIM simulation.
+#[derive(Debug, Clone)]
+pub struct PimConfig {
+    pub page_size: u64,
+    pub banks: u64,
+    pub data_width: u64,
+    pub activation_size: u64,
+    pub neuron_size: u64,
+}
+
+impl Default for PimConfig {
+    fn default() -> Self {
+        Self {
+            page_size: 1024,
+            banks: 32 * 32, // 1024 banks = 32 channels × 32 banks each
+            data_width: 4,  // f32
+            activation_size: 4 * 1024, // 4K
+            neuron_size: 11008,
+        }
+    }
+}
+
+/// Aggregated simulation result (serializable).
+#[derive(Debug, Clone, Serialize)]
+pub struct PimResult {
+    pub total_records: u64,
+    pub total_neurons: u64,
+    pub total_selected_neurons: u64,
+    pub up_dense: u64,
+    pub down_dense: u64,
+    pub up_total_naive_time: u64,
+    pub up_total_asnc_time: u64,
+    pub up_total_iterleave_time: u64,
+    pub down_total_interproduct_time_single: u64,
+    pub down_total_interproduct_time_two: u64,
+    pub down_total_rowwise_bitserial_time_method_1: u64,
+    pub down_total_rowwise_bitserial_time_method_2: u64,
+}
+
+/// Accumulates PIM timing across records (two-record interleaving).
+pub struct PimContext {
+    config: PimConfig,
+
+    up_dense: u64,
+    up_total_naive_time: u64,
+    up_total_asnc_time: u64,
+    up_total_iterleave_time: u64,
+
+    down_dense: u64,
+    down_total_interproduct_time_single: u64,
+    down_total_interproduct_time_two: u64,
+    down_total_rowwise_bitserial_time_method_1: u64,
+    down_total_rowwise_bitserial_time_method_2: u64,
+
+    total_records: u64,
+    total_neurons: u64,
+    total_selected_neurons: u64,
+
+    last_round_index: Option<Vec<usize>>,
+    last_round_index_down: Option<Vec<usize>>,
+}
+
+impl PimContext {
+    pub fn new(config: PimConfig) -> Self {
+        Self {
+            config,
+            up_dense: 0,
+            up_total_naive_time: 0,
+            up_total_asnc_time: 0,
+            up_total_iterleave_time: 0,
+            down_dense: 0,
+            down_total_interproduct_time_single: 0,
+            down_total_interproduct_time_two: 0,
+            down_total_rowwise_bitserial_time_method_1: 0,
+            down_total_rowwise_bitserial_time_method_2: 0,
+            total_records: 0,
+            total_neurons: 0,
+            total_selected_neurons: 0,
+            last_round_index: None,
+            last_round_index_down: None,
+        }
+    }
+
+    /// Feed one record's active neuron indices into the simulation.
+    pub fn compute_time(&mut self, total: usize, indices: &[usize]) {
+        let total = total as u64;
+        let active = indices.len() as u64;
+        self.total_records += 1;
+        self.total_neurons += total;
+        self.total_selected_neurons += active;
+
+        let banks = self.config.banks as usize;
+        let page_size = self.config.page_size as usize;
+        let data_width = self.config.data_width as usize;
+        let activation_size = self.config.activation_size as usize;
+        let neuron_size = self.config.neuron_size as usize;
+
+        // ── UP projection ──────────────────────────────────────
+        let naive_single_neuron_size = activation_size * data_width; // 16 KB
+        let up_rows_per_bank = naive_single_neuron_size / page_size; // 16
+        assert_eq!(naive_single_neuron_size % page_size, 0);
+
+        // dense baseline
+        self.up_dense += ((neuron_size + banks - 1) / banks * up_rows_per_bank) as u64;
+
+        // 1. naive layout — all banks in a channel activate the same row
+        {
+            let mut valid_rows: Vec<std::collections::HashSet<usize>> =
+                (0..32).map(|_| std::collections::HashSet::new()).collect();
+            for &i in indices {
+                let channel_id = (i / 32) % 32;
+                let row_id = i / 32 / 32;
+                valid_rows[channel_id].insert(row_id);
+            }
+            let max_rows = valid_rows.iter().map(|s| s.len()).max().unwrap_or(0);
+            self.up_total_naive_time += (max_rows * up_rows_per_bank) as u64;
+        }
+
+        // 2. async layout — each bank activates independently
+        {
+            let mut rows_per_each_bank = vec![vec![0usize; 32]; 32];
+            for &i in indices {
+                let channel_id = (i / 32) % 32;
+                let bank_id = i % 32;
+                rows_per_each_bank[channel_id][bank_id] += 1;
+            }
+            let max_rows = rows_per_each_bank
+                .iter()
+                .map(|ch| ch.iter().max().copied().unwrap_or(0))
+                .max()
+                .unwrap_or(0);
+            self.up_total_asnc_time += (max_rows * up_rows_per_bank) as u64;
+        }
+
+        // 3. interleave layout — pair two consecutive records
+        if let Some(ref last) = self.last_round_index {
+            let set1: std::collections::HashSet<usize> = last.iter().copied().collect();
+            let set2: std::collections::HashSet<usize> = indices.iter().copied().collect();
+            let all: std::collections::HashSet<usize> = set1.union(&set2).copied().collect();
+
+            let mut rows_per_each_bank = vec![0usize; banks];
+            for &i in &all {
+                rows_per_each_bank[i % banks] += 1;
+            }
+            let max_rows = rows_per_each_bank.iter().max().copied().unwrap_or(0);
+            self.up_total_iterleave_time += (max_rows * up_rows_per_bank) as u64;
+            self.last_round_index = None;
+        } else {
+            self.last_round_index = Some(indices.to_vec());
+        }
+
+        // ── DOWN projection ────────────────────────────────────
+        // dense baseline
+        let down_rows = (neuron_size * data_width + page_size - 1) / page_size;
+        self.down_dense += (down_rows * (activation_size / banks)) as u64;
+
+        // 1. inner product — single batch
+        {
+            let mut row_index_count: std::collections::HashSet<usize> =
+                std::collections::HashSet::new();
+            for &i in indices {
+                row_index_count.insert(i * data_width / page_size);
+            }
+            self.down_total_interproduct_time_single +=
+                (row_index_count.len() * (activation_size / banks)) as u64;
+        }
+
+        // 2. inner product — two batches interleaved
+        if let Some(ref last) = self.last_round_index_down {
+            let mut all_rows: std::collections::HashSet<usize> =
+                std::collections::HashSet::new();
+            for &i in last {
+                all_rows.insert(i * data_width / page_size);
+            }
+            for &i in indices {
+                all_rows.insert(i * data_width / page_size);
+            }
+            self.down_total_interproduct_time_two +=
+                (all_rows.len() * (activation_size / banks)) as u64;
+            self.last_round_index_down = None;
+        } else {
+            self.last_round_index_down = Some(indices.to_vec());
+        }
+
+        // 3. row-wise bitserial method 1
+        {
+            let rw_rows_per_bank = (activation_size * data_width) / page_size; // 16
+            let mut tasks = vec![0usize; banks];
+            for &i in indices {
+                tasks[i % banks] += 1;
+            }
+            let max_tasks = tasks.iter().max().copied().unwrap_or(0);
+            self.down_total_rowwise_bitserial_time_method_1 +=
+                (max_tasks * rw_rows_per_bank) as u64;
+        }
+
+        // 4. row-wise bitserial method 2
+        {
+            let group_size = activation_size * data_width / page_size; // 16
+            let num_groups = banks / group_size;
+            let mut tasks = vec![0usize; num_groups];
+            for &i in indices {
+                tasks[i % num_groups] += 1;
+            }
+            let max_tasks = tasks.iter().max().copied().unwrap_or(0);
+            self.down_total_rowwise_bitserial_time_method_2 += max_tasks as u64; // rows_per_bank = 1
+        }
+    }
+
+    /// Flush any remaining unpaired interleaved records.
+    pub fn finish(&mut self) {
+        let banks = self.config.banks as usize;
+        let up_rows_per_bank =
+            (self.config.activation_size as usize * self.config.data_width as usize)
+                / self.config.page_size as usize;
+
+        // Flush up interleave
+        if let Some(ref last) = self.last_round_index {
+            let mut rows_per_each_bank = vec![0usize; banks];
+            for &i in last {
+                rows_per_each_bank[i % banks] += 1;
+            }
+            let max_rows = rows_per_each_bank.iter().max().copied().unwrap_or(0);
+            self.up_total_iterleave_time += (max_rows * up_rows_per_bank) as u64;
+            self.last_round_index = None;
+        }
+
+        // Flush down interleave (two-batch inner product)
+        if let Some(ref last) = self.last_round_index_down {
+            let mut row_index_count: std::collections::HashSet<usize> =
+                std::collections::HashSet::new();
+            for &i in last {
+                row_index_count.insert(
+                    i * self.config.data_width as usize / self.config.page_size as usize,
+                );
+            }
+            self.down_total_interproduct_time_single += (row_index_count.len()
+                * (self.config.activation_size as usize / banks))
+                as u64;
+            self.last_round_index_down = None;
+        }
+    }
+
+    pub fn into_result(mut self) -> PimResult {
+        self.finish();
+        PimResult {
+            total_records: self.total_records,
+            total_neurons: self.total_neurons,
+            total_selected_neurons: self.total_selected_neurons,
+            up_dense: self.up_dense,
+            down_dense: self.down_dense,
+            up_total_naive_time: self.up_total_naive_time,
+            up_total_asnc_time: self.up_total_asnc_time,
+            up_total_iterleave_time: self.up_total_iterleave_time,
+            down_total_interproduct_time_single: self.down_total_interproduct_time_single,
+            down_total_interproduct_time_two: self.down_total_interproduct_time_two,
+            down_total_rowwise_bitserial_time_method_1: self
+                .down_total_rowwise_bitserial_time_method_1,
+            down_total_rowwise_bitserial_time_method_2: self
+                .down_total_rowwise_bitserial_time_method_2,
+        }
+    }
+}
+
+/// Run PIM simulation over a record iterator with the given activation threshold.
+pub fn run_simulation<I>(records: I, threshold: f32, config: PimConfig) -> PimResult
+where
+    I: Iterator<Item = Result<Record>>,
+{
+    let mut ctx = PimContext::new(config);
+    for record in records {
+        let record = match record {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("Warning: {}", e);
+                continue;
+            }
+        };
+        let indices: Vec<usize> = record
+            .scores
+            .iter()
+            .enumerate()
+            .filter(|(_, &s)| s > threshold)
+            .map(|(i, _)| i)
+            .collect();
+        ctx.compute_time(record.scores.len(), &indices);
+    }
+    ctx.into_result()
+}
+
+// ── Filter ──────────────────────────────────────────────────────
 
 /// Filter a record iterator, keeping only records matching the given layer and/or batch.
 pub struct FilterIter<I: Iterator<Item = Result<Record>>> {

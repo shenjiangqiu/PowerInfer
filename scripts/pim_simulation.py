@@ -1,12 +1,13 @@
 import argparse
-import argparse
 import json
 import os
-import struct
 import sys
 
 
-from .convert_sparse_dump import read_binary
+try:
+    from .convert_sparse_dump import read_binary
+except ImportError:
+    from convert_sparse_dump import read_binary
 
 
 class PimContext:
@@ -212,7 +213,7 @@ class PimContext:
             for i in self.last_round_index_down:
                 row_index_count_set_1.add(i * self.data_width // self.page_size)
 
-            self.down_total_interproduct_time += len(row_index_count_set_1) * (
+            self.down_total_interproduct_time_single += len(row_index_count_set_1) * (
                 self.activation_size // self.banks
             )
             self.last_round_index_down = None
@@ -234,8 +235,12 @@ class PimContext:
             "down_total_rowwise_bitserial_time_method_2": self.down_total_rowwise_bitserial_time_method_2,
         }
 
-        with open(output_file, "w") as f:
-            json.dump(result, f, indent=4)
+        if isinstance(output_file, str):
+            with open(output_file, "w") as f:
+                json.dump(result, f, indent=4)
+        else:
+            json.dump(result, output_file, indent=4)
+            output_file.write("\n")
 
     pass
 def parse_index_histogram(histogram:list[int], active_indices:list[int] ):

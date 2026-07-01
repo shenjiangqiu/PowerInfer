@@ -32,6 +32,7 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('histogram', 'histogram', [CompletionResultType]::ParameterValue, 'Compute per-layer histograms of positive-score positions')
             [CompletionResult]::new('print', 'print', [CompletionResultType]::ParameterValue, 'Print info of the first N records')
             [CompletionResult]::new('sparsity', 'sparsity', [CompletionResultType]::ParameterValue, 'Compute sparsity statistics (overall and per-layer)')
+            [CompletionResult]::new('simulate', 'simulate', [CompletionResultType]::ParameterValue, 'Run PIM simulation with given activation threshold')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -54,10 +55,20 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'parse_histogram;simulate' {
+            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Activation threshold (default: 0.0)')
+            [CompletionResult]::new('--threshold', '--threshold', [CompletionResultType]::ParameterName, 'Activation threshold (default: 0.0)')
+            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (default: stdout)')
+            [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (default: stdout)')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'parse_histogram;help' {
             [CompletionResult]::new('histogram', 'histogram', [CompletionResultType]::ParameterValue, 'Compute per-layer histograms of positive-score positions')
             [CompletionResult]::new('print', 'print', [CompletionResultType]::ParameterValue, 'Print info of the first N records')
             [CompletionResult]::new('sparsity', 'sparsity', [CompletionResultType]::ParameterValue, 'Compute sparsity statistics (overall and per-layer)')
+            [CompletionResult]::new('simulate', 'simulate', [CompletionResultType]::ParameterValue, 'Run PIM simulation with given activation threshold')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -68,6 +79,9 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             break
         }
         'parse_histogram;help;sparsity' {
+            break
+        }
+        'parse_histogram;help;simulate' {
             break
         }
         'parse_histogram;help;help' {

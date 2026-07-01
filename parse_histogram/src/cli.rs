@@ -37,4 +37,13 @@ pub enum Commands {
     },
     /// Compute sparsity statistics (overall and per-layer)
     Sparsity,
+    /// Run PIM simulation with given activation threshold
+    Simulate {
+        /// Activation threshold (default: 0.0)
+        #[arg(short = 't', long, default_value = "0.0")]
+        threshold: f32,
+        /// Save result as JSON to this file (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }

@@ -31,13 +31,18 @@ complete -c parse_histogram -n "__fish_parse_histogram_needs_command" -s h -l he
 complete -c parse_histogram -n "__fish_parse_histogram_needs_command" -f -a "histogram" -d 'Compute per-layer histograms of positive-score positions'
 complete -c parse_histogram -n "__fish_parse_histogram_needs_command" -f -a "print" -d 'Print info of the first N records'
 complete -c parse_histogram -n "__fish_parse_histogram_needs_command" -f -a "sparsity" -d 'Compute sparsity statistics (overall and per-layer)'
+complete -c parse_histogram -n "__fish_parse_histogram_needs_command" -f -a "simulate" -d 'Run PIM simulation with given activation threshold'
 complete -c parse_histogram -n "__fish_parse_histogram_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand histogram" -s o -l output -d 'Save histogram as JSON to this file' -r -F
 complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand histogram" -s h -l help -d 'Print help'
 complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand print" -s n -l count -d 'Number of records to print' -r
 complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand print" -s h -l help -d 'Print help'
 complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand sparsity" -s h -l help -d 'Print help'
-complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity help" -f -a "histogram" -d 'Compute per-layer histograms of positive-score positions'
-complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity help" -f -a "print" -d 'Print info of the first N records'
-complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity help" -f -a "sparsity" -d 'Compute sparsity statistics (overall and per-layer)'
-complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand simulate" -s t -l threshold -d 'Activation threshold (default: 0.0)' -r
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand simulate" -s o -l output -d 'Save result as JSON to this file (default: stdout)' -r -F
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand simulate" -s h -l help -d 'Print help'
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity simulate help" -f -a "histogram" -d 'Compute per-layer histograms of positive-score positions'
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity simulate help" -f -a "print" -d 'Print info of the first N records'
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity simulate help" -f -a "sparsity" -d 'Compute sparsity statistics (overall and per-layer)'
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity simulate help" -f -a "simulate" -d 'Run PIM simulation with given activation threshold'
+complete -c parse_histogram -n "__fish_parse_histogram_using_subcommand help; and not __fish_seen_subcommand_from histogram print sparsity simulate help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'

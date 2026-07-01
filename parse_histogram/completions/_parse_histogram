@@ -54,6 +54,16 @@ _arguments "${_arguments_options[@]}" : \
 '--help[Print help]' \
 && ret=0
 ;;
+(simulate)
+_arguments "${_arguments_options[@]}" : \
+'-t+[Activation threshold (default\: 0.0)]:THRESHOLD:_default' \
+'--threshold=[Activation threshold (default\: 0.0)]:THRESHOLD:_default' \
+'-o+[Save result as JSON to this file (default\: stdout)]:OUTPUT:_files' \
+'--output=[Save result as JSON to this file (default\: stdout)]:OUTPUT:_files' \
+'-h[Print help]' \
+'--help[Print help]' \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 ":: :_parse_histogram__subcmd__help_commands" \
@@ -78,6 +88,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(simulate)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (help)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -97,6 +111,7 @@ _parse_histogram_commands() {
 'histogram:Compute per-layer histograms of positive-score positions' \
 'print:Print info of the first N records' \
 'sparsity:Compute sparsity statistics (overall and per-layer)' \
+'simulate:Run PIM simulation with given activation threshold' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'parse_histogram commands' commands "$@"
@@ -107,6 +122,7 @@ _parse_histogram__subcmd__help_commands() {
 'histogram:Compute per-layer histograms of positive-score positions' \
 'print:Print info of the first N records' \
 'sparsity:Compute sparsity statistics (overall and per-layer)' \
+'simulate:Run PIM simulation with given activation threshold' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
     _describe -t commands 'parse_histogram help commands' commands "$@"
@@ -126,6 +142,11 @@ _parse_histogram__subcmd__help__subcmd__print_commands() {
     local commands; commands=()
     _describe -t commands 'parse_histogram help print commands' commands "$@"
 }
+(( $+functions[_parse_histogram__subcmd__help__subcmd__simulate_commands] )) ||
+_parse_histogram__subcmd__help__subcmd__simulate_commands() {
+    local commands; commands=()
+    _describe -t commands 'parse_histogram help simulate commands' commands "$@"
+}
 (( $+functions[_parse_histogram__subcmd__help__subcmd__sparsity_commands] )) ||
 _parse_histogram__subcmd__help__subcmd__sparsity_commands() {
     local commands; commands=()
@@ -140,6 +161,11 @@ _parse_histogram__subcmd__histogram_commands() {
 _parse_histogram__subcmd__print_commands() {
     local commands; commands=()
     _describe -t commands 'parse_histogram print commands' commands "$@"
+}
+(( $+functions[_parse_histogram__subcmd__simulate_commands] )) ||
+_parse_histogram__subcmd__simulate_commands() {
+    local commands; commands=()
+    _describe -t commands 'parse_histogram simulate commands' commands "$@"
 }
 (( $+functions[_parse_histogram__subcmd__sparsity_commands] )) ||
 _parse_histogram__subcmd__sparsity_commands() {
