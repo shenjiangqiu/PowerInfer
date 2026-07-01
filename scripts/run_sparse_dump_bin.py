@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from .husky3_path import MODEL_MAP
+from husky3_path import MODEL_MAP
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 POWERINFER_DIR = SCRIPT_DIR.parent
