@@ -239,7 +239,7 @@ _parse_histogram() {
             return 0
             ;;
         parse_histogram__subcmd__simulate)
-            opts="-t -o -h --threshold --output --help"
+            opts="-t -o -r -h --threshold --output --remap --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -258,6 +258,14 @@ _parse_histogram() {
                     return 0
                     ;;
                 -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remap)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -r)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -283,7 +291,7 @@ _parse_histogram() {
             return 0
             ;;
         parse_histogram__subcmd__to__subcmd__cycle)
-            opts="-t -o -h --threshold --output --help"
+            opts="-t -o -r -h --threshold --output --remap --help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -302,6 +310,14 @@ _parse_histogram() {
                     return 0
                     ;;
                 -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --remap)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -r)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

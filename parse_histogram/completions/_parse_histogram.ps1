@@ -61,6 +61,8 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('--threshold', '--threshold', [CompletionResultType]::ParameterName, 'Activation threshold (default: 0.0)')
             [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (auto-derived if omitted)')
             [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Save result as JSON to this file (auto-derived if omitted)')
+            [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Path to remap JSON for balanced bank placement')
+            [CompletionResult]::new('--remap', '--remap', [CompletionResultType]::ParameterName, 'Path to remap JSON for balanced bank placement')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -70,6 +72,8 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('--threshold', '--threshold', [CompletionResultType]::ParameterName, 'Activation threshold for simulation (default: 0.0)')
             [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Save cycle result as JSON (default: stdout)')
             [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Save cycle result as JSON (default: stdout)')
+            [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Path to remap JSON for balanced bank placement')
+            [CompletionResult]::new('--remap', '--remap', [CompletionResultType]::ParameterName, 'Path to remap JSON for balanced bank placement')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break

@@ -1,17 +1,9 @@
-python scripts/run_sparse_dump_bin.py  --models Bamboo-dpo-7B \
+
+
+python scripts/run_sparse_dump_bin.py  --models "ProSparse-llama-7b" \
 --datasets wiki,c4,alpaca \
 --max-prompts 20 \
 --n-predict 1 \
 --threads 20 \
---dumpdir ./dumpbins_bamboo_dpo \
---main-bin ./build/bin/main
-
-
-
-python scripts/run_sparse_dump_bin.py  --models ReluLLaMA-7B \
---datasets wiki,c4,alpaca \
---max-prompts 20 \
---n-predict 1 \
---threads 20 \
---dumpdir ./dumpbins_relu_llama_7b \
---main-bin ./build/bin/main
+--dumpdir ./dumpbins_prosparse_llama_7b \
+--main-bin ./build_cpu/bin/main

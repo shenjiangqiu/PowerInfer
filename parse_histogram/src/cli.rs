@@ -45,6 +45,9 @@ pub enum Commands {
         /// Save result as JSON to this file (auto-derived if omitted)
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Path to remap JSON for balanced bank placement
+        #[arg(short = 'r', long)]
+        remap: Option<PathBuf>,
     },
     /// Convert simulation stats to cycle counts (auto-runs simulation if needed)
     ToCycle {
@@ -54,5 +57,8 @@ pub enum Commands {
         /// Save cycle result as JSON (default: stdout)
         #[arg(short, long)]
         output: Option<PathBuf>,
+        /// Path to remap JSON for balanced bank placement
+        #[arg(short = 'r', long)]
+        remap: Option<PathBuf>,
     },
 }

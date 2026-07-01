@@ -8,8 +8,8 @@ use clap::Parser;
 use cli::{Args, Commands};
 use parse_histogram::{
     self, compute_cycles, compute_histograms, compute_sparsity, derive_json_path,
-    print_first_records, print_histograms, print_sparsity, run_simulation,
-    FilterIter, PimConfig, PimResult,
+    derive_remap_json_path, print_first_records, print_histograms, print_sparsity,
+    run_simulation, FilterIter, PimConfig, PimResult,
 };
 
 fn main() -> Result<()> {
@@ -23,8 +23,8 @@ fn main() -> Result<()> {
     let args = Args::parse();
 
     // to-cycle handles its own file I/O (may run simulation first)
-    if let Commands::ToCycle { threshold, output } = &args.command {
-        return cmd_to_cycle(&args, *threshold, output.as_ref());
+    if let Commands::ToCycle { threshold, output, remap } = &args.command {
+        return cmd_to_cycle(&args, *threshold, output.as_ref(), remap.as_ref());
     }
 
     let iter = parse_histogram::open(&args.file)?;
@@ -54,14 +54,25 @@ fn main() -> Result<()> {
             let stats = compute_sparsity(filtered);
             print_sparsity(&stats);
         }
-        Commands::Simulate { threshold, output } => {
+        Commands::Simulate { threshold, output, remap } => {
+            let remap_table = if let Some(ref rp) = remap {
+                Some(parse_histogram::RemapTable::load(rp)?)
+            } else {
+                None
+            };
             tracing::info!(
-                "Running PIM simulation (threshold={})...",
-                threshold
+                "Running PIM simulation (threshold={}, remap={})...",
+                threshold, remap.is_some()
             );
-            let result = run_simulation(filtered, threshold, PimConfig::default());
+            let result = run_simulation(filtered, threshold, PimConfig::default(), remap_table);
 
-            let out_path = output.unwrap_or_else(|| derive_json_path(&args.file));
+            let out_path = output.unwrap_or_else(|| {
+                if remap.is_some() {
+                    derive_remap_json_path(&args.file)
+                } else {
+                    derive_json_path(&args.file)
+                }
+            });
             let json = serde_json::to_string_pretty(&result)
                 .context("failed to serialize simulation result to JSON")?;
             fs::write(&out_path, json)
@@ -78,8 +89,17 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn cmd_to_cycle(args: &Args, threshold: f32, output: Option<&PathBuf>) -> Result<()> {
-    let sim_path = derive_json_path(&args.file);
+fn cmd_to_cycle(args: &Args, threshold: f32, output: Option<&PathBuf>, remap: Option<&PathBuf>) -> Result<()> {
+    let remap_table = if let Some(rp) = remap {
+        Some(parse_histogram::RemapTable::load(rp)?)
+    } else {
+        None
+    };
+    let sim_path = if remap.is_some() {
+        derive_remap_json_path(&args.file)
+    } else {
+        derive_json_path(&args.file)
+    };
 
     let pim_result: PimResult = if sim_path.exists() {
         tracing::info!("Using cached simulation JSON: {}", sim_path.display());
@@ -94,7 +114,7 @@ fn cmd_to_cycle(args: &Args, threshold: f32, output: Option<&PathBuf>) -> Result
         );
         let iter = parse_histogram::open(&args.file)?;
         let filtered = FilterIter::new(iter, args.layer, args.batch);
-        let result = run_simulation(filtered, threshold, PimConfig::default());
+        let result = run_simulation(filtered, threshold, PimConfig::default(), remap_table);
         let json = serde_json::to_string_pretty(&result)
             .context("failed to serialize simulation result to JSON")?;
         fs::write(&sim_path, &json)

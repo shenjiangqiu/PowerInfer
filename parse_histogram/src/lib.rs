@@ -330,6 +330,8 @@ pub fn print_sparsity(stats: &SparsityStats) {
 pub struct PimConfig {
     pub page_size: u64,
     pub banks: u64,
+    pub channels: u64,
+    pub banks_per_channel: u64,
     pub data_width: u64,
     pub activation_size: u64,
     pub neuron_size: u64,
@@ -340,10 +342,30 @@ impl Default for PimConfig {
         Self {
             page_size: 1024,
             banks: 32 * 32, // 1024 banks = 32 channels × 32 banks each
+            channels: 32,
+            banks_per_channel: 32,
             data_width: 4,  // f32
             activation_size: 4 * 1024, // 4K
             neuron_size: 11008,
         }
+    }
+}
+
+/// Pre-computed neuron-to-bank remapping for load balancing.
+/// Loaded from a JSON file generated from histogram data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RemapTable {
+    /// Maps layer_id -> Vec<bank_index> (0..banks) for DOWN projection methods.
+    pub down_remap: HashMap<i32, Vec<usize>>,
+    /// Maps layer_id -> Vec<bank_in_channel> (0..banks_per_channel) for UP async.
+    pub up_remap: HashMap<i32, Vec<usize>>,
+}
+
+impl RemapTable {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let s = fs::read_to_string(path.as_ref())
+            .with_context(|| format!("failed to read remap file {}", path.as_ref().display()))?;
+        serde_json::from_str(&s).context("failed to parse remap JSON")
     }
 }
 
@@ -362,11 +384,18 @@ pub struct PimResult {
     pub down_total_interproduct_time_two: u64,
     pub down_total_rowwise_bitserial_time_method_1: u64,
     pub down_total_rowwise_bitserial_time_method_2: u64,
+    // Balanced metrics (with remap)
+    pub up_total_asnc_time_bal: u64,
+    pub down_total_method_1_bal: u64,
+    // Imbalance overhead stats
+    pub up_async_imbalance_overhead: u64,
+    pub down_method_1_imbalance_overhead: u64,
 }
 
 /// Accumulates PIM timing across records (two-record interleaving).
 pub struct PimContext {
     config: PimConfig,
+    remap: Option<RemapTable>,
 
     up_dense: u64,
     up_total_naive_time: u64,
@@ -379,6 +408,14 @@ pub struct PimContext {
     down_total_rowwise_bitserial_time_method_1: u64,
     down_total_rowwise_bitserial_time_method_2: u64,
 
+    // Balanced versions (with remap)
+    up_total_asnc_time_bal: u64,
+    down_total_method_1_bal: u64,
+
+    // Imbalance overhead: sum of (actual - balanced_if_perfect) per record
+    up_async_imbalance_overhead: u64,
+    down_method_1_imbalance_overhead: u64,
+
     total_records: u64,
     total_neurons: u64,
     total_selected_neurons: u64,
@@ -388,9 +425,10 @@ pub struct PimContext {
 }
 
 impl PimContext {
-    pub fn new(config: PimConfig) -> Self {
+    pub fn new(config: PimConfig, remap: Option<RemapTable>) -> Self {
         Self {
             config,
+            remap,
             up_dense: 0,
             up_total_naive_time: 0,
             up_total_asnc_time: 0,
@@ -400,6 +438,10 @@ impl PimContext {
             down_total_interproduct_time_two: 0,
             down_total_rowwise_bitserial_time_method_1: 0,
             down_total_rowwise_bitserial_time_method_2: 0,
+            up_total_asnc_time_bal: 0,
+            down_total_method_1_bal: 0,
+            up_async_imbalance_overhead: 0,
+            down_method_1_imbalance_overhead: 0,
             total_records: 0,
             total_neurons: 0,
             total_selected_neurons: 0,
@@ -409,7 +451,7 @@ impl PimContext {
     }
 
     /// Feed one record's active neuron indices into the simulation.
-    pub fn compute_time(&mut self, total: usize, indices: &[usize]) {
+    pub fn compute_time(&mut self, layer: i32, total: usize, indices: &[usize]) {
         let total = total as u64;
         let active = indices.len() as u64;
         self.total_records += 1;
@@ -445,10 +487,18 @@ impl PimContext {
 
         // 2. async layout — each bank activates independently
         {
-            let mut rows_per_each_bank = vec![vec![0usize; 32]; 32];
+            let channels = self.config.channels as usize;
+            let bpc = self.config.banks_per_channel as usize;
+            let mut rows_per_each_bank = vec![vec![0usize; bpc]; channels];
+            let up_remap = self.remap.as_ref().and_then(|r| r.up_remap.get(&layer));
+
             for &i in indices {
-                let channel_id = (i / 32) % 32;
-                let bank_id = i % 32;
+                let channel_id = (i / bpc) % channels;
+                let bank_id = if let Some(remap) = up_remap {
+                    if i < remap.len() { remap[i] } else { i % bpc }
+                } else {
+                    i % bpc
+                };
                 rows_per_each_bank[channel_id][bank_id] += 1;
             }
             let max_rows = rows_per_each_bank
@@ -457,6 +507,18 @@ impl PimContext {
                 .max()
                 .unwrap_or(0);
             self.up_total_asnc_time += (max_rows * up_rows_per_bank) as u64;
+
+            // Balanced time: ideal if all banks in each channel got equal work
+            let mut balanced_max_rows = 0usize;
+            for ch in rows_per_each_bank.iter() {
+                let ch_total: usize = ch.iter().sum();
+                let ch_bal = (ch_total + bpc - 1) / bpc;
+                balanced_max_rows = balanced_max_rows.max(ch_bal);
+            }
+            self.up_total_asnc_time_bal += (balanced_max_rows * up_rows_per_bank) as u64;
+            if max_rows > balanced_max_rows {
+                self.up_async_imbalance_overhead += ((max_rows - balanced_max_rows) * up_rows_per_bank) as u64;
+            }
         }
 
         // 3. interleave layout — pair two consecutive records
@@ -513,12 +575,27 @@ impl PimContext {
         {
             let rw_rows_per_bank = (activation_size * data_width) / page_size; // 16
             let mut tasks = vec![0usize; banks];
+            let down_remap = self.remap.as_ref().and_then(|r| r.down_remap.get(&layer));
+
             for &i in indices {
-                tasks[i % banks] += 1;
+                let bank = if let Some(remap) = down_remap {
+                    if i < remap.len() { remap[i] } else { i % banks }
+                } else {
+                    i % banks
+                };
+                tasks[bank] += 1;
             }
             let max_tasks = tasks.iter().max().copied().unwrap_or(0);
             self.down_total_rowwise_bitserial_time_method_1 +=
                 (max_tasks * rw_rows_per_bank) as u64;
+
+            // Balanced time: ideal if all banks got equal work
+            let total_active: usize = tasks.iter().sum();
+            let balanced = (total_active + banks - 1) / banks;
+            self.down_total_method_1_bal += (balanced * rw_rows_per_bank) as u64;
+            if max_tasks > balanced {
+                self.down_method_1_imbalance_overhead += ((max_tasks - balanced) * rw_rows_per_bank) as u64;
+            }
         }
 
         // 4. row-wise bitserial method 2
@@ -585,16 +662,20 @@ impl PimContext {
                 .down_total_rowwise_bitserial_time_method_1,
             down_total_rowwise_bitserial_time_method_2: self
                 .down_total_rowwise_bitserial_time_method_2,
+            up_total_asnc_time_bal: self.up_total_asnc_time_bal,
+            down_total_method_1_bal: self.down_total_method_1_bal,
+            up_async_imbalance_overhead: self.up_async_imbalance_overhead,
+            down_method_1_imbalance_overhead: self.down_method_1_imbalance_overhead,
         }
     }
 }
 
 /// Run PIM simulation over a record iterator with the given activation threshold.
-pub fn run_simulation<I>(records: I, threshold: f32, config: PimConfig) -> PimResult
+pub fn run_simulation<I>(records: I, threshold: f32, config: PimConfig, remap: Option<RemapTable>) -> PimResult
 where
     I: Iterator<Item = Result<Record>>,
 {
-    let mut ctx = PimContext::new(config);
+    let mut ctx = PimContext::new(config, remap);
     for record in records {
         let record = match record {
             Ok(r) => r,
@@ -610,7 +691,7 @@ where
             .filter(|(_, &s)| s > threshold)
             .map(|(i, _)| i)
             .collect();
-        ctx.compute_time(record.scores.len(), &indices);
+        ctx.compute_time(record.layer, record.scores.len(), &indices);
     }
     ctx.into_result()
 }
@@ -664,11 +745,20 @@ impl<I: Iterator<Item = Result<Record>>> Iterator for FilterIter<I> {
 /// Derive the simulation JSON path from the input path:
 /// - file → same dir, `.json` extension
 /// - dir  → `<dir>/simulation.json`
+/// If `remap` is true, use `simulation_remap.json`
 pub fn derive_json_path(input_path: &Path) -> PathBuf {
     if input_path.is_dir() {
         input_path.join("simulation.json")
     } else {
         input_path.with_extension("json")
+    }
+}
+
+pub fn derive_remap_json_path(input_path: &Path) -> PathBuf {
+    if input_path.is_dir() {
+        input_path.join("simulation_remap.json")
+    } else {
+        input_path.with_extension("remap.json")
     }
 }
 
@@ -693,6 +783,14 @@ pub struct CycleResult {
     pub down_total_interproduct_time_two_compute: u64,
     pub down_total_rowwise_bitserial_time_method_1: u64,
     pub down_total_rowwise_bitserial_time_method_2: u64,
+    // Balanced versions
+    pub up_total_asnc_time_bal_row_open: u64,
+    pub up_total_asnc_time_bal_compute: u64,
+    pub down_total_method_1_bal: u64,
+    // Imbalance overheads
+    pub up_async_imbalance_overhead_row_open: u64,
+    pub up_async_imbalance_overhead_compute: u64,
+    pub down_method_1_imbalance_overhead: u64,
 }
 
 /// Convert PIM simulation stats to cycle counts.
@@ -752,6 +850,16 @@ pub fn compute_cycles(stat: &PimResult) -> CycleResult {
     let down_total_rowwise_bitserial_time_method_2 =
         stat.down_total_rowwise_bitserial_time_method_2 * bitserial_factor;
 
+    // Balanced metrics
+    let up_total_asnc_time_bal_row_open = stat.up_total_asnc_time_bal * row_open;
+    let up_total_asnc_time_bal_compute = stat.up_total_asnc_time_bal * row_compute;
+    let down_total_method_1_bal = stat.down_total_method_1_bal * bitserial_factor;
+
+    // Imbalance overheads
+    let up_async_imbalance_overhead_row_open = stat.up_async_imbalance_overhead * row_open;
+    let up_async_imbalance_overhead_compute = stat.up_async_imbalance_overhead * row_compute;
+    let down_method_1_imbalance_overhead = stat.down_method_1_imbalance_overhead * bitserial_factor;
+
     CycleResult {
         gpu_cycle,
         gpu_cycle_sparse,
@@ -771,5 +879,11 @@ pub fn compute_cycles(stat: &PimResult) -> CycleResult {
         down_total_interproduct_time_two_compute,
         down_total_rowwise_bitserial_time_method_1,
         down_total_rowwise_bitserial_time_method_2,
+        up_total_asnc_time_bal_row_open,
+        up_total_asnc_time_bal_compute,
+        down_total_method_1_bal,
+        up_async_imbalance_overhead_row_open,
+        up_async_imbalance_overhead_compute,
+        down_method_1_imbalance_overhead,
     }
 }

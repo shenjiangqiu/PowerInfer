@@ -1,0 +1,14 @@
+{
+  "total_records": 710944,
+  "total_neurons": 10192093184,
+  "total_selected_neurons": 2261951956,
+  "up_dense": 125126144,
+  "down_dense": 122282368,
+  "up_total_naive_time": 153172880,
+  "up_total_asnc_time": 94580496,
+  "up_total_iterleave_time": 62957408,
+  "down_total_interproduct_time_single": 154354356,
+  "down_total_interproduct_time_two": 79613380,
+  "down_total_rowwise_bitserial_time_method_1": 94580496,
+  "down_total_rowwise_bitserial_time_method_2": 45728610
+}

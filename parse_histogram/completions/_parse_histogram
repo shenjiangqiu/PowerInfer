@@ -60,6 +60,8 @@ _arguments "${_arguments_options[@]}" : \
 '--threshold=[Activation threshold (default\: 0.0)]:THRESHOLD:_default' \
 '-o+[Save result as JSON to this file (auto-derived if omitted)]:OUTPUT:_files' \
 '--output=[Save result as JSON to this file (auto-derived if omitted)]:OUTPUT:_files' \
+'-r+[Path to remap JSON for balanced bank placement]:REMAP:_files' \
+'--remap=[Path to remap JSON for balanced bank placement]:REMAP:_files' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0
@@ -70,6 +72,8 @@ _arguments "${_arguments_options[@]}" : \
 '--threshold=[Activation threshold for simulation (default\: 0.0)]:THRESHOLD:_default' \
 '-o+[Save cycle result as JSON (default\: stdout)]:OUTPUT:_files' \
 '--output=[Save cycle result as JSON (default\: stdout)]:OUTPUT:_files' \
+'-r+[Path to remap JSON for balanced bank placement]:REMAP:_files' \
+'--remap=[Path to remap JSON for balanced bank placement]:REMAP:_files' \
 '-h[Print help]' \
 '--help[Print help]' \
 && ret=0

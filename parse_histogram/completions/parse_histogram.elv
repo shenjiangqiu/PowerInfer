@@ -54,6 +54,8 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
             cand --threshold 'Activation threshold (default: 0.0)'
             cand -o 'Save result as JSON to this file (auto-derived if omitted)'
             cand --output 'Save result as JSON to this file (auto-derived if omitted)'
+            cand -r 'Path to remap JSON for balanced bank placement'
+            cand --remap 'Path to remap JSON for balanced bank placement'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -62,6 +64,8 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
             cand --threshold 'Activation threshold for simulation (default: 0.0)'
             cand -o 'Save cycle result as JSON (default: stdout)'
             cand --output 'Save cycle result as JSON (default: stdout)'
+            cand -r 'Path to remap JSON for balanced bank placement'
+            cand --remap 'Path to remap JSON for balanced bank placement'
             cand -h 'Print help'
             cand --help 'Print help'
         }

@@ -1,0 +1,18 @@
+{
+  "total_records": 710944,
+  "total_neurons": 10192093184,
+  "total_selected_neurons": 2261951948,
+  "up_dense": 125126144,
+  "down_dense": 122282368,
+  "up_total_naive_time": 153172880,
+  "up_total_asnc_time": 95774912,
+  "up_total_iterleave_time": 62957408,
+  "down_total_interproduct_time_single": 154354356,
+  "down_total_interproduct_time_two": 79613380,
+  "down_total_rowwise_bitserial_time_method_1": 95454864,
+  "down_total_rowwise_bitserial_time_method_2": 45728612,
+  "up_total_asnc_time_bal": 48343328,
+  "down_total_method_1_bal": 41005808,
+  "up_async_imbalance_overhead": 47431584,
+  "down_method_1_imbalance_overhead": 54449056
+}
