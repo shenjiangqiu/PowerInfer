@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from husky3_path import MODEL_MAP
+from husky5_path import MODEL_MAP
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 POWERINFER_DIR = SCRIPT_DIR.parent
@@ -152,7 +152,7 @@ def main():
                     break
 
                 dumpfile = dumpdir / f"{model_short}-{ds}-{i}.bin"
-
+                dumpfile_json = dumpdir / f"{model_short}-{ds}-{i}.json"
                 if dumpfile.exists() and dumpfile.stat().st_size > 0:
                     print(f"  [{i}] SKIP (exists: {dumpfile})")
                     continue
@@ -161,7 +161,7 @@ def main():
 
                 env = os.environ.copy()
                 env["POWERINFER_DUMP_BINARY"] = str(dumpfile)
-
+                env["POWERINFER_DUMP_SPARSE"] = str(dumpfile_json)
                 proc = subprocess.run(
                     [
                         str(main_bin),
