@@ -218,6 +218,10 @@ static size_t llama_set_vram_budget(double budget_gb, int gpu_device) {
 // sparse dump helper functions
 //
 void llama_sparse_dump_begin(const char * filepath) {
+    if (sparse_dump_fp) {
+        fclose(sparse_dump_fp);
+        sparse_dump_fp = nullptr;
+    }
     sparse_dump_fp = fopen(filepath, "w");
     if (!sparse_dump_fp) {
         LLAMA_LOG_ERROR("failed to open sparse dump file: %s\n", filepath);
@@ -232,8 +236,12 @@ void llama_sparse_dump_end() {
     if (sparse_dump_fp) {
         fclose(sparse_dump_fp);
         sparse_dump_fp = nullptr;
-        LLAMA_LOG_INFO("sparse dump completed\n");
     }
+    if (sparse_dump_bin_fp) {
+        fclose(sparse_dump_bin_fp);
+        sparse_dump_bin_fp = nullptr;
+    }
+    LLAMA_LOG_INFO("sparse dump completed\n");
 }
 
 static bool llama_reduce_vram_budget(size_t budget_bytes) {
@@ -4681,6 +4689,7 @@ static struct ggml_tensor * llm_build_sparse_axpy(
 
 static struct ggml_tensor * llm_build_ffn_sparse(
         struct ggml_context * ctx,
+         struct ggml_cgraph * gf,
          struct ggml_tensor * cur,
          struct ggml_tensor * up,
          struct ggml_tensor * up_b,
@@ -4723,11 +4732,12 @@ static struct ggml_tensor * llm_build_ffn_sparse(
     idx = ggml_mul_mat(ctx, pre_w2, idx);
     // If the FFN layer is not fully offloaded, we need to transfer the sparsity index
     // back to the CPU to avoid synchronization issues.
-    (full_gpu ? cb : cb_outer)(idx, "mlp_pre_out");
+    (full_gpu && sparse_dump_fp == nullptr && sparse_dump_bin_fp == nullptr ? cb : cb_outer)(idx, "mlp_pre_out");
 
-    // register for dump if enabled
+    // register for dump if enabled; expand to prevent ggml-alloc buffer reuse
     if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
         sparse_dump_idx_tensors.push_back({il, idx});
+        ggml_build_forward_expand(gf, idx);
     }
 
     auto act_fn = [&](ggml_tensor * tensor, const char * name) {
@@ -5074,7 +5084,7 @@ struct llm_build_context {
                     } else {
                         cbs(cur, "ffn_norm");
                     }
-                    cur = llm_build_ffn_sparse(ctx0, cur,
+                    cur = llm_build_ffn_sparse(ctx0, gf, cur,
                         model.layers[il].ffn_up,   NULL,
                         model.layers[il].ffn_gate, NULL,
                         model.layers[il].ffn_down_t, NULL,
@@ -5201,7 +5211,7 @@ struct llm_build_context {
                     } else {
                         cbs(cur, "ffn_norm");
                     }
-                    cur = llm_build_ffn_sparse(ctx0, cur,
+                    cur = llm_build_ffn_sparse(ctx0, gf, cur,
                         model.layers[il].ffn_up,   model.layers[il].ffn_up_b,
                         NULL,                      NULL,
                         model.layers[il].ffn_down_t, model.layers[il].ffn_down_b,
@@ -5455,7 +5465,7 @@ struct llm_build_context {
                 } else {
                     cbs(cur, "attn_norm");
                 }
-                cur = llm_build_ffn_sparse(ctx0, attn_norm,
+                cur = llm_build_ffn_sparse(ctx0, gf, attn_norm,
                     model.layers[il].ffn_up,   NULL,
                     NULL, NULL,
                     model.layers[il].ffn_down_t, NULL,
@@ -6991,7 +7001,7 @@ static int llama_decode_internal(
                 }
             }
         }
-        sparse_dump_cur_token++;
+        sparse_dump_cur_token += n_tokens;
         sparse_dump_idx_tensors.clear();
         if (sparse_dump_fp) fflush(sparse_dump_fp);
         if (sparse_dump_bin_fp) fflush(sparse_dump_bin_fp);

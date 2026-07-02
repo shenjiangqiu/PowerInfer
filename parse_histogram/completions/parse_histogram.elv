@@ -31,6 +31,7 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
             cand sparsity 'Compute sparsity statistics (overall and per-layer)'
             cand simulate 'Run PIM simulation with given activation threshold'
             cand to-cycle 'Convert simulation stats to cycle counts (auto-runs simulation if needed)'
+            cand parse-json 'parse-json'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'parse_histogram;histogram'= {
@@ -69,12 +70,17 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
             cand -h 'Print help'
             cand --help 'Print help'
         }
+        &'parse_histogram;parse-json'= {
+            cand -h 'Print help'
+            cand --help 'Print help'
+        }
         &'parse_histogram;help'= {
             cand histogram 'Compute per-layer histograms of positive-score positions'
             cand print 'Print info of the first N records'
             cand sparsity 'Compute sparsity statistics (overall and per-layer)'
             cand simulate 'Run PIM simulation with given activation threshold'
             cand to-cycle 'Convert simulation stats to cycle counts (auto-runs simulation if needed)'
+            cand parse-json 'parse-json'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'parse_histogram;help;histogram'= {
@@ -86,6 +92,8 @@ set edit:completion:arg-completer[parse_histogram] = {|@words|
         &'parse_histogram;help;simulate'= {
         }
         &'parse_histogram;help;to-cycle'= {
+        }
+        &'parse_histogram;help;parse-json'= {
         }
         &'parse_histogram;help;help'= {
         }

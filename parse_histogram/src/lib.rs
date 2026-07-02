@@ -81,10 +81,8 @@ impl<R: Read> Iterator for RecordIter<R> {
         let data_bytes = n * 4;
         let mut buf = vec![0u8; data_bytes];
         if let Err(e) = self.reader.read_exact(&mut buf) {
-            return Some(Err(anyhow::Error::from(e).context(format!(
-                "failed to read data for record {}",
-                self.index
-            ))));
+            return Some(Err(anyhow::Error::from(e)
+                .context(format!("failed to read data for record {}", self.index))));
         }
 
         let scores: Vec<f32> = buf
@@ -292,6 +290,12 @@ where
             total_neurons: 0,
             activated_neurons: 0,
         });
+        // tracing::info!(
+        //     "layer {}: total {}, activated {}",
+        //     record.layer,
+        //     total,
+        //     activated
+        // );
         entry.total_neurons += total;
         entry.activated_neurons += activated;
     }
@@ -307,7 +311,8 @@ where
 
 /// Print sparsity statistics in tab-separated format.
 pub fn print_sparsity(stats: &SparsityStats) {
-    println!("Overall sparsity: {:.4}  (activated {}/{} total neurons)",
+    println!(
+        "Overall sparsity: {:.4}  (activated {}/{} total neurons)",
         stats.overall.sparsity(),
         stats.overall.activated_neurons,
         stats.overall.total_neurons,
@@ -319,7 +324,13 @@ pub fn print_sparsity(stats: &SparsityStats) {
     layers.sort_unstable();
     for layer in layers {
         let ls = &stats.per_layer[&layer];
-        println!("{}\t{}\t{}\t{:.4}", layer, ls.total_neurons, ls.activated_neurons, ls.sparsity());
+        println!(
+            "{}\t{}\t{}\t{:.4}",
+            layer,
+            ls.total_neurons,
+            ls.activated_neurons,
+            ls.sparsity()
+        );
     }
 }
 
@@ -344,7 +355,7 @@ impl Default for PimConfig {
             banks: 32 * 32, // 1024 banks = 32 channels × 32 banks each
             channels: 32,
             banks_per_channel: 32,
-            data_width: 4,  // f32
+            data_width: 4,             // f32
             activation_size: 4 * 1024, // 4K
             neuron_size: 11008,
         }
@@ -495,7 +506,11 @@ impl PimContext {
             for &i in indices {
                 let channel_id = (i / bpc) % channels;
                 let bank_id = if let Some(remap) = up_remap {
-                    if i < remap.len() { remap[i] } else { i % bpc }
+                    if i < remap.len() {
+                        remap[i]
+                    } else {
+                        i % bpc
+                    }
                 } else {
                     i % bpc
                 };
@@ -517,7 +532,8 @@ impl PimContext {
             }
             self.up_total_asnc_time_bal += (balanced_max_rows * up_rows_per_bank) as u64;
             if max_rows > balanced_max_rows {
-                self.up_async_imbalance_overhead += ((max_rows - balanced_max_rows) * up_rows_per_bank) as u64;
+                self.up_async_imbalance_overhead +=
+                    ((max_rows - balanced_max_rows) * up_rows_per_bank) as u64;
             }
         }
 
@@ -556,8 +572,7 @@ impl PimContext {
 
         // 2. inner product — two batches interleaved
         if let Some(ref last) = self.last_round_index_down {
-            let mut all_rows: std::collections::HashSet<usize> =
-                std::collections::HashSet::new();
+            let mut all_rows: std::collections::HashSet<usize> = std::collections::HashSet::new();
             for &i in last {
                 all_rows.insert(i * data_width / page_size);
             }
@@ -579,7 +594,11 @@ impl PimContext {
 
             for &i in indices {
                 let bank = if let Some(remap) = down_remap {
-                    if i < remap.len() { remap[i] } else { i % banks }
+                    if i < remap.len() {
+                        remap[i]
+                    } else {
+                        i % banks
+                    }
                 } else {
                     i % banks
                 };
@@ -594,7 +613,8 @@ impl PimContext {
             let balanced = (total_active + banks - 1) / banks;
             self.down_total_method_1_bal += (balanced * rw_rows_per_bank) as u64;
             if max_tasks > balanced {
-                self.down_method_1_imbalance_overhead += ((max_tasks - balanced) * rw_rows_per_bank) as u64;
+                self.down_method_1_imbalance_overhead +=
+                    ((max_tasks - balanced) * rw_rows_per_bank) as u64;
             }
         }
 
@@ -607,16 +627,17 @@ impl PimContext {
                 tasks[i % num_groups] += 1;
             }
             let max_tasks = tasks.iter().max().copied().unwrap_or(0);
-            self.down_total_rowwise_bitserial_time_method_2 += max_tasks as u64; // rows_per_bank = 1
+            self.down_total_rowwise_bitserial_time_method_2 += max_tasks as u64;
+            // rows_per_bank = 1
         }
     }
 
     /// Flush any remaining unpaired interleaved records.
     pub fn finish(&mut self) {
         let banks = self.config.banks as usize;
-        let up_rows_per_bank =
-            (self.config.activation_size as usize * self.config.data_width as usize)
-                / self.config.page_size as usize;
+        let up_rows_per_bank = (self.config.activation_size as usize
+            * self.config.data_width as usize)
+            / self.config.page_size as usize;
 
         // Flush up interleave
         if let Some(ref last) = self.last_round_index {
@@ -634,13 +655,11 @@ impl PimContext {
             let mut row_index_count: std::collections::HashSet<usize> =
                 std::collections::HashSet::new();
             for &i in last {
-                row_index_count.insert(
-                    i * self.config.data_width as usize / self.config.page_size as usize,
-                );
+                row_index_count
+                    .insert(i * self.config.data_width as usize / self.config.page_size as usize);
             }
-            self.down_total_interproduct_time_single += (row_index_count.len()
-                * (self.config.activation_size as usize / banks))
-                as u64;
+            self.down_total_interproduct_time_single +=
+                (row_index_count.len() * (self.config.activation_size as usize / banks)) as u64;
             self.last_round_index_down = None;
         }
     }
@@ -671,7 +690,12 @@ impl PimContext {
 }
 
 /// Run PIM simulation over a record iterator with the given activation threshold.
-pub fn run_simulation<I>(records: I, threshold: f32, config: PimConfig, remap: Option<RemapTable>) -> PimResult
+pub fn run_simulation<I>(
+    records: I,
+    threshold: f32,
+    config: PimConfig,
+    remap: Option<RemapTable>,
+) -> PimResult
 where
     I: Iterator<Item = Result<Record>>,
 {
@@ -797,7 +821,7 @@ pub struct CycleResult {
 pub fn compute_cycles(stat: &PimResult) -> CycleResult {
     let bandwidth: u64 = 128; // 1024/8 bytes/ns
     let data_width: u64 = 4;
-    let row_open: u64 = 56;   // ns
+    let row_open: u64 = 56; // ns
     let row_compute: u64 = 64; // 1024/16 ns
     let enable_gate = false;
 

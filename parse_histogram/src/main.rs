@@ -8,22 +8,42 @@ use clap::Parser;
 use cli::{Args, Commands};
 use parse_histogram::{
     self, compute_cycles, compute_histograms, compute_sparsity, derive_json_path,
-    derive_remap_json_path, print_first_records, print_histograms, print_sparsity,
-    run_simulation, FilterIter, PimConfig, PimResult,
+    derive_remap_json_path, print_first_records, print_histograms, print_sparsity, run_simulation,
+    FilterIter, PimConfig, PimResult,
 };
-
+use serde::Deserialize;
+#[derive(Deserialize)]
+struct JsonFile {
+    token: u64,
+    layer: u64,
+    batch: u64,
+    total: u64,
+    active: u64,
+    indices: Vec<u32>,
+}
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
 
     let args = Args::parse();
 
+    if let Commands::ParseJson {} = &args.command {
+        let result: Result<JsonFile, _> = serde_json::from_reader(
+            fs::File::open(&args.file)
+                .with_context(|| format!("failed to open {}", args.file.display()))?,
+        );
+        return Ok(());
+    }
     // to-cycle handles its own file I/O (may run simulation first)
-    if let Commands::ToCycle { threshold, output, remap } = &args.command {
+    if let Commands::ToCycle {
+        threshold,
+        output,
+        remap,
+    } = &args.command
+    {
         return cmd_to_cycle(&args, *threshold, output.as_ref(), remap.as_ref());
     }
 
@@ -54,7 +74,11 @@ fn main() -> Result<()> {
             let stats = compute_sparsity(filtered);
             print_sparsity(&stats);
         }
-        Commands::Simulate { threshold, output, remap } => {
+        Commands::Simulate {
+            threshold,
+            output,
+            remap,
+        } => {
             let remap_table = if let Some(ref rp) = remap {
                 Some(parse_histogram::RemapTable::load(rp)?)
             } else {
@@ -62,7 +86,8 @@ fn main() -> Result<()> {
             };
             tracing::info!(
                 "Running PIM simulation (threshold={}, remap={})...",
-                threshold, remap.is_some()
+                threshold,
+                remap.is_some()
             );
             let result = run_simulation(filtered, threshold, PimConfig::default(), remap_table);
 
@@ -84,12 +109,18 @@ fn main() -> Result<()> {
             );
         }
         Commands::ToCycle { .. } => unreachable!(),
+        Commands::ParseJson {} => {}
     }
 
     Ok(())
 }
 
-fn cmd_to_cycle(args: &Args, threshold: f32, output: Option<&PathBuf>, remap: Option<&PathBuf>) -> Result<()> {
+fn cmd_to_cycle(
+    args: &Args,
+    threshold: f32,
+    output: Option<&PathBuf>,
+    remap: Option<&PathBuf>,
+) -> Result<()> {
     let remap_table = if let Some(rp) = remap {
         Some(parse_histogram::RemapTable::load(rp)?)
     } else {
@@ -105,8 +136,7 @@ fn cmd_to_cycle(args: &Args, threshold: f32, output: Option<&PathBuf>, remap: Op
         tracing::info!("Using cached simulation JSON: {}", sim_path.display());
         let json_str = fs::read_to_string(&sim_path)
             .with_context(|| format!("failed to read {}", sim_path.display()))?;
-        serde_json::from_str(&json_str)
-            .context("failed to parse simulation JSON")?
+        serde_json::from_str(&json_str).context("failed to parse simulation JSON")?
     } else {
         tracing::info!(
             "Simulation JSON not found, running simulation (threshold={})...",

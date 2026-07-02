@@ -106,3 +106,5 @@ dump.json
 /dumpbins
 *.jsonl
 out.json
+dumpbins*
+.zig*

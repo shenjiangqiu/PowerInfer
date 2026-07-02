@@ -61,4 +61,8 @@ pub enum Commands {
         #[arg(short = 'r', long)]
         remap: Option<PathBuf>,
     },
+
+    ParseJson{
+        
+    }
 }

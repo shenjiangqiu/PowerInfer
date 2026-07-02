@@ -34,6 +34,7 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('sparsity', 'sparsity', [CompletionResultType]::ParameterValue, 'Compute sparsity statistics (overall and per-layer)')
             [CompletionResult]::new('simulate', 'simulate', [CompletionResultType]::ParameterValue, 'Run PIM simulation with given activation threshold')
             [CompletionResult]::new('to-cycle', 'to-cycle', [CompletionResultType]::ParameterValue, 'Convert simulation stats to cycle counts (auto-runs simulation if needed)')
+            [CompletionResult]::new('parse-json', 'parse-json', [CompletionResultType]::ParameterValue, 'parse-json')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -78,12 +79,18 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'parse_histogram;parse-json' {
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            break
+        }
         'parse_histogram;help' {
             [CompletionResult]::new('histogram', 'histogram', [CompletionResultType]::ParameterValue, 'Compute per-layer histograms of positive-score positions')
             [CompletionResult]::new('print', 'print', [CompletionResultType]::ParameterValue, 'Print info of the first N records')
             [CompletionResult]::new('sparsity', 'sparsity', [CompletionResultType]::ParameterValue, 'Compute sparsity statistics (overall and per-layer)')
             [CompletionResult]::new('simulate', 'simulate', [CompletionResultType]::ParameterValue, 'Run PIM simulation with given activation threshold')
             [CompletionResult]::new('to-cycle', 'to-cycle', [CompletionResultType]::ParameterValue, 'Convert simulation stats to cycle counts (auto-runs simulation if needed)')
+            [CompletionResult]::new('parse-json', 'parse-json', [CompletionResultType]::ParameterValue, 'parse-json')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -100,6 +107,9 @@ Register-ArgumentCompleter -Native -CommandName 'parse_histogram' -ScriptBlock {
             break
         }
         'parse_histogram;help;to-cycle' {
+            break
+        }
+        'parse_histogram;help;parse-json' {
             break
         }
         'parse_histogram;help;help' {
