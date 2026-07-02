@@ -161,7 +161,6 @@ def main():
 
                 env = os.environ.copy()
                 env["POWERINFER_DUMP_BINARY"] = str(dumpfile)
-                env["POWERINFER_DUMP_SPARSE"] = str(dumpfile_json)
                 proc = subprocess.run(
                     [
                         str(main_bin),
