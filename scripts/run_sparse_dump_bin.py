@@ -13,7 +13,10 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from husky5_path import MODEL_MAP
+
+
+from husky5_path import MODEL_MAP as husky5_model_map
+from mac_path import MODEL_MAP as mac_model_map
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 POWERINFER_DIR = SCRIPT_DIR.parent
@@ -27,7 +30,6 @@ from download_dataset import (
 )
 
 
-
 DATASET_HANDLERS = {
     "wiki": download_wiki,
     "c4": download_c4,
@@ -36,10 +38,16 @@ DATASET_HANDLERS = {
 }
 
 
-def resolve_model(key: str, model_dir: str) -> str:
+def resolve_model(key: str, model_dir: str, machine: str) -> str:
     if os.path.isfile(key):
         return key
-    handler = MODEL_MAP.get(key)
+    if machine == "husky5":
+        my_map = husky5_model_map
+    elif machine == "mac":
+        my_map = mac_model_map
+    else:
+        sys.exit(f"ERROR: unknown machine '{machine}'")
+    handler = my_map.get(key)
     if handler is None:
         sys.exit(f"ERROR: unknown model key '{key}' and not a file path")
     if isinstance(handler, str):
@@ -106,6 +114,9 @@ def main():
     parser.add_argument(
         "--model-dir", default=None, help="Directory containing model files"
     )
+    parser.add_argument(
+        "--machine", default="mac", help="Machine type (default: mac) options: mac, husky5"
+    )
     args = parser.parse_args()
 
     powerinfer_dir = POWERINFER_DIR
@@ -126,7 +137,7 @@ def main():
     total = 0
 
     for model_key in models:
-        model_path = resolve_model(model_key, model_dir)
+        model_path = resolve_model(model_key, model_dir, args.machine)
         if not model_path or not os.path.isfile(model_path):
             print(f"SKIP: model not found: {model_path}", file=sys.stderr)
             continue

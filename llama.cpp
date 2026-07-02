@@ -109,6 +109,12 @@ static FILE * sparse_dump_fp = nullptr;
 static FILE * sparse_dump_bin_fp = nullptr;
 static int    sparse_dump_cur_token = 0;
 static std::vector<std::pair<int, struct ggml_tensor *>> sparse_dump_idx_tensors; // (layer, idx_tensor)
+// idx tensors live inside the graph's scratch buffer, whose memory ggml-alloc
+// is free to reuse across layers once it thinks an idx tensor is dead. Point
+// idx->data at layer-owned storage here instead, so ggml-alloc treats it like
+// an external (leaf) tensor and leaves it alone; ggml_graph_compute will then
+// write each layer's predictor output straight into its own buffer.
+static std::vector<std::vector<float>> sparse_dump_data_bufs; // indexed by layer
 
 //
 // logging
@@ -242,6 +248,26 @@ void llama_sparse_dump_end() {
         sparse_dump_bin_fp = nullptr;
     }
     LLAMA_LOG_INFO("sparse dump completed\n");
+}
+
+static void llama_sparse_dump_truncate_file(FILE * fp) {
+    if (!fp) {
+        return;
+    }
+    fflush(fp);
+#if defined(_WIN32)
+    _chsize(_fileno(fp), 0);
+#else
+    ftruncate(fileno(fp), 0);
+#endif
+    fseek(fp, 0, SEEK_SET);
+}
+
+void llama_sparse_dump_reset() {
+    llama_sparse_dump_truncate_file(sparse_dump_fp);
+    llama_sparse_dump_truncate_file(sparse_dump_bin_fp);
+    sparse_dump_cur_token = 0;
+    sparse_dump_idx_tensors.clear();
 }
 
 static bool llama_reduce_vram_budget(size_t budget_bytes) {
@@ -4733,8 +4759,17 @@ static struct ggml_tensor * llm_build_ffn_sparse(
     // back to the CPU to avoid synchronization issues.
     (full_gpu && sparse_dump_fp == nullptr && sparse_dump_bin_fp == nullptr ? cb : cb_outer)(idx, "mlp_pre_out");
 
-    // register for dump if enabled
+    // register for dump if enabled; give idx its own permanent buffer so
+    // ggml-alloc can't recycle its memory for a later layer's idx tensor
+    // (idx normally lives in the shared graph scratch buffer and gets freed
+    // as soon as its last consumer in this layer runs)
     if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
+        size_t need = (size_t) idx->ne[0] * (size_t) idx->ne[1];
+        if ((size_t) il >= sparse_dump_data_bufs.size()) {
+            sparse_dump_data_bufs.resize(il + 1);
+        }
+        sparse_dump_data_bufs[il].resize(need);
+        idx->data = sparse_dump_data_bufs[il].data();
         sparse_dump_idx_tensors.push_back({il, idx});
     }
 
@@ -5124,19 +5159,6 @@ struct llm_build_context {
 
         ggml_build_forward_expand(gf, cur);
 
-        // anchor sparse dump idx tensors to prevent ggml-alloc buffer reuse
-        if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
-            struct ggml_tensor * anchor = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-            anchor = ggml_set_zero(anchor);
-            ggml_set_name(anchor, "sparse_dump_anchor_start");
-            for (auto & kv : sparse_dump_idx_tensors) {
-                struct ggml_tensor * first_elem = ggml_view_1d(ctx0, kv.second, 1, 0);
-                anchor = ggml_add(ctx0, anchor, first_elem);
-            }
-            ggml_set_name(anchor, "sparse_dump_anchor_end");
-            ggml_build_forward_expand(gf, anchor);
-        }
-
         return gf;
     }
 
@@ -5256,20 +5278,6 @@ struct llm_build_context {
         cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
         cb(cur, "result_output", -1);
         ggml_build_forward_expand(gf, cur);
-
-        // anchor sparse dump idx tensors to prevent ggml-alloc buffer reuse
-        if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
-            struct ggml_tensor * anchor = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-            anchor = ggml_set_zero(anchor);
-            ggml_set_name(anchor, "sparse_dump_anchor_start");
-            for (auto & kv : sparse_dump_idx_tensors) {
-                // pin idx by creating a dependency at the end of the graph
-                struct ggml_tensor * first_elem = ggml_view_1d(ctx0, kv.second, 1, 0);
-                anchor = ggml_add(ctx0, anchor, first_elem);
-            }
-            ggml_set_name(anchor, "sparse_dump_anchor_end");
-            ggml_build_forward_expand(gf, anchor);
-        }
 
         return gf;
     }
@@ -5534,19 +5542,6 @@ struct llm_build_context {
         cb(cur, "result_output", -1);
 
         ggml_build_forward_expand(gf, cur);
-
-        // anchor sparse dump idx tensors to prevent ggml-alloc buffer reuse
-        if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
-            struct ggml_tensor * anchor = ggml_new_tensor_1d(ctx0, GGML_TYPE_F32, 1);
-            anchor = ggml_set_zero(anchor);
-            ggml_set_name(anchor, "sparse_dump_anchor_start");
-            for (auto & kv : sparse_dump_idx_tensors) {
-                struct ggml_tensor * first_elem = ggml_view_1d(ctx0, kv.second, 1, 0);
-                anchor = ggml_add(ctx0, anchor, first_elem);
-            }
-            ggml_set_name(anchor, "sparse_dump_anchor_end");
-            ggml_build_forward_expand(gf, anchor);
-        }
 
         return gf;
     }
@@ -10032,26 +10027,6 @@ struct llama_context * llama_new_context_with_model(
             ctx->embedding.resize(hparams.n_embd);
         }
 
-        // auto-enable sparse dump via environment variable (must be before measurement)
-        {
-            const char * dump_path = getenv("POWERINFER_DUMP_SPARSE");
-            if (dump_path && dump_path[0] != '\0') {
-                sparse_dump_fp = fopen(dump_path, "w");
-                if (sparse_dump_fp) {
-                    sparse_dump_cur_token = 0;
-                    sparse_dump_idx_tensors.clear();
-                    LLAMA_LOG_INFO("sparse dump auto-enabled, writing to %s\n", dump_path);
-                }
-            }
-            const char * dump_bin_path = getenv("POWERINFER_DUMP_BINARY");
-            if (dump_bin_path && dump_bin_path[0] != '\0') {
-                sparse_dump_bin_fp = fopen(dump_bin_path, "wb");
-                if (sparse_dump_bin_fp) {
-                    LLAMA_LOG_INFO("sparse binary dump enabled, writing to %s\n", dump_bin_path);
-                }
-            }
-        }
-
         {
             static const size_t tensor_alignment = 32;
             // the compute buffer is used to store the tensor and graph structs, while the allocator buffer is used for the tensor data
@@ -10122,6 +10097,28 @@ struct llama_context * llama_new_context_with_model(
                     model_vram_size / 1024.0 / 1024.0,
                     ctx_vram_size / 1024.0 / 1024.0);
 #endif
+        }
+
+        // auto-enable sparse dump via environment variable; done after the
+        // measurement pass so the (fake, discarded) warm-up graph build
+        // doesn't need per-layer dump buffers sized for the worst case
+        {
+            const char * dump_path = getenv("POWERINFER_DUMP_SPARSE");
+            if (dump_path && dump_path[0] != '\0') {
+                sparse_dump_fp = fopen(dump_path, "w");
+                if (sparse_dump_fp) {
+                    sparse_dump_cur_token = 0;
+                    sparse_dump_idx_tensors.clear();
+                    LLAMA_LOG_INFO("sparse dump auto-enabled, writing to %s\n", dump_path);
+                }
+            }
+            const char * dump_bin_path = getenv("POWERINFER_DUMP_BINARY");
+            if (dump_bin_path && dump_bin_path[0] != '\0') {
+                sparse_dump_bin_fp = fopen(dump_bin_path, "wb");
+                if (sparse_dump_bin_fp) {
+                    LLAMA_LOG_INFO("sparse binary dump enabled, writing to %s\n", dump_bin_path);
+                }
+            }
         }
 
 #ifdef GGML_USE_METAL

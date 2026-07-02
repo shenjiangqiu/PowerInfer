@@ -306,6 +306,9 @@ extern "C" {
     // Dump sparse predictor selections (begin/end per session, auto-called per token)
     LLAMA_API void llama_sparse_dump_begin(const char * filepath);
     LLAMA_API void llama_sparse_dump_end(void);
+    // Discard anything written so far (e.g. from a warm-up decode) and restart
+    // token numbering from 0. No-op if dumping isn't enabled.
+    LLAMA_API void llama_sparse_dump_reset(void);
 
     LLAMA_API int llama_n_vocab    (const struct llama_model * model);
     LLAMA_API int llama_n_ctx_train(const struct llama_model * model);
