@@ -13,6 +13,7 @@
 *.bat
 *.metallib
 .DS_Store
+remap_*.json
 .build/
 .cache/
 .ccls-cache/
@@ -100,3 +101,13 @@ tests/test-tokenizer-1-llama
 tests/test-tokenizer-1-bpe
 
 build-info.h
+dump_th05.jsonl
+dump.json
+
+/dumpbins
+*.jsonl
+out.json
+/dumpbins*
+.zig*
+parse_histogram/completions/
+/paper/

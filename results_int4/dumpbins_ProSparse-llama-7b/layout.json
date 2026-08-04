@@ -1,0 +1,148 @@
+{
+  "records": 729664,
+  "naive_up_rows": 13812936,
+  "naive_up_time_ns": 1657552320,
+  "naive_down_rows": 17511936,
+  "naive_down_time_ns": 2101432320,
+  "gpu_dense_bytes": 32899650813952,
+  "gpu_dense_time_ns": 32638542451,
+  "gpu_sparse_bytes": 3080207863808,
+  "gpu_sparse_time_ns": 3055761743,
+  "oracle_up_rows": 2328878,
+  "oracle_up_time_ns": 279465360,
+  "oracle_down_rows": 3322536,
+  "oracle_down_chunks": 95439080,
+  "oracle_down_time_ns": 281501096,
+  "configs": [
+    {
+      "name": "async only (modulo, no remap)",
+      "up_rows": 6587030,
+      "up_time_ns": 790443600,
+      "down_rows": 17201220,
+      "down_chunk_compute": 751692544,
+      "down_chunk_compute_full_row": 1100878080,
+      "down_time_ns": 1714960864,
+      "down_time_ns_full_row": 2064146400
+    },
+    {
+      "name": "async + random remap",
+      "up_rows": 6592450,
+      "up_time_ns": 791094000,
+      "down_rows": 17201220,
+      "down_chunk_compute": 751692544,
+      "down_chunk_compute_full_row": 1100878080,
+      "down_time_ns": 1714960864,
+      "down_time_ns_full_row": 2064146400
+    },
+    {
+      "name": "non-distributed async",
+      "up_rows": 6127396,
+      "up_time_ns": 735287520,
+      "down_rows": 17201220,
+      "down_chunk_compute": 751692544,
+      "down_chunk_compute_full_row": 1100878080,
+      "down_time_ns": 1714960864,
+      "down_time_ns_full_row": 2064146400
+    },
+    {
+      "name": "non-distributed + down-clustered",
+      "up_rows": 6127396,
+      "up_time_ns": 735287520,
+      "down_rows": 16108200,
+      "down_chunk_compute": 623378916,
+      "down_chunk_compute_full_row": 1030924800,
+      "down_time_ns": 1525438116,
+      "down_time_ns_full_row": 1932984000
+    },
+    {
+      "name": "distributed span=2 no-stagger",
+      "up_rows": 4368920,
+      "up_time_ns": 524270400,
+      "down_rows": 17323088,
+      "down_chunk_compute": 838994968,
+      "down_chunk_compute_full_row": 1108677632,
+      "down_time_ns": 1809087896,
+      "down_time_ns_full_row": 2078770560
+    },
+    {
+      "name": "distributed span=2 staggered",
+      "up_rows": 4368920,
+      "up_time_ns": 524270400,
+      "down_rows": 17201220,
+      "down_chunk_compute": 751692544,
+      "down_chunk_compute_full_row": 1100878080,
+      "down_time_ns": 1714960864,
+      "down_time_ns_full_row": 2064146400
+    },
+    {
+      "name": "distributed span=2 staggered+clustered",
+      "up_rows": 4368920,
+      "up_time_ns": 524270400,
+      "down_rows": 16108200,
+      "down_chunk_compute": 623378916,
+      "down_chunk_compute_full_row": 1030924800,
+      "down_time_ns": 1525438116,
+      "down_time_ns_full_row": 1932984000
+    },
+    {
+      "name": "distributed span=4 no-stagger",
+      "up_rows": 6543665,
+      "up_time_ns": 785239800,
+      "down_rows": 23112368,
+      "down_chunk_compute": 1118448112,
+      "down_chunk_compute_full_row": 1479191552,
+      "down_time_ns": 2412740720,
+      "down_time_ns_full_row": 2773484160
+    },
+    {
+      "name": "distributed span=4 staggered",
+      "up_rows": 6543665,
+      "up_time_ns": 785239800,
+      "down_rows": 17201220,
+      "down_chunk_compute": 751692544,
+      "down_chunk_compute_full_row": 1100878080,
+      "down_time_ns": 1714960864,
+      "down_time_ns_full_row": 2064146400
+    },
+    {
+      "name": "distributed span=4 staggered+clustered",
+      "up_rows": 6543665,
+      "up_time_ns": 785239800,
+      "down_rows": 16108200,
+      "down_chunk_compute": 623378916,
+      "down_chunk_compute_full_row": 1030924800,
+      "down_time_ns": 1525438116,
+      "down_time_ns_full_row": 1932984000
+    },
+    {
+      "name": "distributed span=8 no-stagger",
+      "up_rows": 10355717,
+      "up_time_ns": 1242686040,
+      "down_rows": 23314240,
+      "down_chunk_compute": 1168490208,
+      "down_chunk_compute_full_row": 1492111360,
+      "down_time_ns": 2474087648,
+      "down_time_ns_full_row": 2797708800
+    },
+    {
+      "name": "distributed span=8 staggered",
+      "up_rows": 10355717,
+      "up_time_ns": 1242686040,
+      "down_rows": 17201220,
+      "down_chunk_compute": 751692544,
+      "down_chunk_compute_full_row": 1100878080,
+      "down_time_ns": 1714960864,
+      "down_time_ns_full_row": 2064146400
+    },
+    {
+      "name": "distributed span=8 staggered+clustered",
+      "up_rows": 10355717,
+      "up_time_ns": 1242686040,
+      "down_rows": 16108200,
+      "down_chunk_compute": 623378916,
+      "down_chunk_compute_full_row": 1030924800,
+      "down_time_ns": 1525438116,
+      "down_time_ns_full_row": 1932984000
+    }
+  ]
+}

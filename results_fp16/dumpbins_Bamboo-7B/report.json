@@ -1,0 +1,66 @@
+{
+  "comparison": [
+    {
+      "ideal_rows": 20762080,
+      "naive_rows": 47239416,
+      "name": "up_async",
+      "remap_rows": 44503928,
+      "remap_vs_ideal": 2.1435197244206745,
+      "speedup_vs_naive": 1.0614662148473726
+    },
+    {
+      "ideal_rows": 20762080,
+      "naive_rows": 47239416,
+      "name": "down_async",
+      "remap_rows": 44503928,
+      "remap_vs_ideal": 2.1435197244206745,
+      "speedup_vs_naive": 1.0614662148473726
+    }
+  ],
+  "naive": {
+    "batch_group": 1,
+    "down_async_imbalance_overhead": 26477336,
+    "down_batch_imbalance_overhead": 26477336,
+    "down_dense": 79288832,
+    "down_total_async_time": 47239416,
+    "down_total_async_time_bal": 20762080,
+    "down_total_batch_time": 47239416,
+    "down_total_batch_time_bal": 20762080,
+    "down_total_interproduct_time_single": 79272768,
+    "down_total_interproduct_time_two": 39637092,
+    "total_neurons": 10148970496,
+    "total_records": 707936,
+    "total_selected_neurons": 2309664256,
+    "up_async_imbalance_overhead": 26477336,
+    "up_batch_imbalance_overhead": 26477336,
+    "up_dense": 79288832,
+    "up_total_asnc_time": 47239416,
+    "up_total_asnc_time_bal": 20762080,
+    "up_total_batch_time": 47239416,
+    "up_total_batch_time_bal": 20762080,
+    "up_total_naive_time": 79202888
+  },
+  "remap": {
+    "batch_group": 1,
+    "down_async_imbalance_overhead": 23741848,
+    "down_batch_imbalance_overhead": 23741848,
+    "down_dense": 79288832,
+    "down_total_async_time": 44503928,
+    "down_total_async_time_bal": 20762080,
+    "down_total_batch_time": 44503928,
+    "down_total_batch_time_bal": 20762080,
+    "down_total_interproduct_time_single": 79272768,
+    "down_total_interproduct_time_two": 39637092,
+    "total_neurons": 10148970496,
+    "total_records": 707936,
+    "total_selected_neurons": 2309664256,
+    "up_async_imbalance_overhead": 23741848,
+    "up_batch_imbalance_overhead": 23741848,
+    "up_dense": 79288832,
+    "up_total_asnc_time": 44503928,
+    "up_total_asnc_time_bal": 20762080,
+    "up_total_batch_time": 44503928,
+    "up_total_batch_time_bal": 20762080,
+    "up_total_naive_time": 79202888
+  }
+}

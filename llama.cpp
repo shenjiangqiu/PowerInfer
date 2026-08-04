@@ -103,6 +103,20 @@
 size_t vram_budget_bytes = 0;
 
 //
+// sparse dump globals (export predictor neuron selections)
+//
+static FILE * sparse_dump_fp = nullptr;
+static FILE * sparse_dump_bin_fp = nullptr;
+static int    sparse_dump_cur_token = 0;
+static std::vector<std::pair<int, struct ggml_tensor *>> sparse_dump_idx_tensors; // (layer, idx_tensor)
+// idx tensors live inside the graph's scratch buffer, whose memory ggml-alloc
+// is free to reuse across layers once it thinks an idx tensor is dead. Point
+// idx->data at layer-owned storage here instead, so ggml-alloc treats it like
+// an external (leaf) tensor and leaves it alone; ggml_graph_compute will then
+// write each layer's predictor output straight into its own buffer.
+static std::vector<std::vector<float>> sparse_dump_data_bufs; // indexed by layer
+
+//
 // logging
 //
 
@@ -204,6 +218,56 @@ static size_t llama_set_vram_budget(double budget_gb, int gpu_device) {
 #else
     return 0;
 #endif
+}
+
+//
+// sparse dump helper functions
+//
+void llama_sparse_dump_begin(const char * filepath) {
+    if (sparse_dump_fp) {
+        fclose(sparse_dump_fp);
+        sparse_dump_fp = nullptr;
+    }
+    sparse_dump_fp = fopen(filepath, "w");
+    if (!sparse_dump_fp) {
+        LLAMA_LOG_ERROR("failed to open sparse dump file: %s\n", filepath);
+        return;
+    }
+    sparse_dump_cur_token = 0;
+    sparse_dump_idx_tensors.clear();
+    LLAMA_LOG_INFO("sparse dump enabled, writing to %s\n", filepath);
+}
+
+void llama_sparse_dump_end() {
+    if (sparse_dump_fp) {
+        fclose(sparse_dump_fp);
+        sparse_dump_fp = nullptr;
+    }
+    if (sparse_dump_bin_fp) {
+        fclose(sparse_dump_bin_fp);
+        sparse_dump_bin_fp = nullptr;
+    }
+    LLAMA_LOG_INFO("sparse dump completed\n");
+}
+
+static void llama_sparse_dump_truncate_file(FILE * fp) {
+    if (!fp) {
+        return;
+    }
+    fflush(fp);
+#if defined(_WIN32)
+    _chsize(_fileno(fp), 0);
+#else
+    ftruncate(fileno(fp), 0);
+#endif
+    fseek(fp, 0, SEEK_SET);
+}
+
+void llama_sparse_dump_reset() {
+    llama_sparse_dump_truncate_file(sparse_dump_fp);
+    llama_sparse_dump_truncate_file(sparse_dump_bin_fp);
+    sparse_dump_cur_token = 0;
+    sparse_dump_idx_tensors.clear();
 }
 
 static bool llama_reduce_vram_budget(size_t budget_bytes) {
@@ -4669,7 +4733,8 @@ static struct ggml_tensor * llm_build_ffn_sparse(
             llm_ffn_op_type   type_op,
           llm_ffn_gate_type   type_gate,
                      double   gpu_offload_ratio,
-   const llm_build_cb_short & cb_outer) {
+   const llm_build_cb_short & cb_outer,
+                         int   il) {
     bool full_gpu = gpu_offload_ratio >= 1.0;
     ggml_tensor * ffn_input = cur;
 
@@ -4692,7 +4757,21 @@ static struct ggml_tensor * llm_build_ffn_sparse(
     idx = ggml_mul_mat(ctx, pre_w2, idx);
     // If the FFN layer is not fully offloaded, we need to transfer the sparsity index
     // back to the CPU to avoid synchronization issues.
-    (full_gpu ? cb : cb_outer)(idx, "mlp_pre_out");
+    (full_gpu && sparse_dump_fp == nullptr && sparse_dump_bin_fp == nullptr ? cb : cb_outer)(idx, "mlp_pre_out");
+
+    // register for dump if enabled; give idx its own permanent buffer so
+    // ggml-alloc can't recycle its memory for a later layer's idx tensor
+    // (idx normally lives in the shared graph scratch buffer and gets freed
+    // as soon as its last consumer in this layer runs)
+    if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
+        size_t need = (size_t) idx->ne[0] * (size_t) idx->ne[1];
+        if ((size_t) il >= sparse_dump_data_bufs.size()) {
+            sparse_dump_data_bufs.resize(il + 1);
+        }
+        sparse_dump_data_bufs[il].resize(need);
+        idx->data = sparse_dump_data_bufs[il].data();
+        sparse_dump_idx_tensors.push_back({il, idx});
+    }
 
     auto act_fn = [&](ggml_tensor * tensor, const char * name) {
         switch (type_op) {
@@ -5047,7 +5126,7 @@ struct llm_build_context {
                         ffn_inp, // as for now, llama's pred use the same input as the ffn
                         model.layers[il].gpu_idx, 
                         model.layers[il].gpu_bucket, model.layers[il].ffn_gate_gpu, model.layers[il].ffn_down_gpu, model.layers[il].ffn_up_gpu,
-                        LLM_FFN_RELU, gate_type, model.layers[il].gpu_offload_ratio, cbs);
+                        LLM_FFN_RELU, gate_type, model.layers[il].gpu_offload_ratio, cbs, il);
                 } else {
                     // fallback to dense
                     cb(cur, "ffn_norm", il);
@@ -5174,7 +5253,7 @@ struct llm_build_context {
                         ffn_inp, 
                         model.layers[il].gpu_idx,
                         model.layers[il].gpu_bucket, model.layers[il].ffn_gate_gpu, model.layers[il].ffn_down_gpu, model.layers[il].ffn_up_gpu,
-                        LLM_FFN_RELU, LLM_FFN_SEQ, model.layers[il].gpu_offload_ratio, cbs);
+                        LLM_FFN_RELU, LLM_FFN_SEQ, model.layers[il].gpu_offload_ratio, cbs, il);
                 } else {
                     cb(cur, "ffn_norm", il);
                     cur = llm_build_ffn(ctx0, cur,
@@ -5198,8 +5277,8 @@ struct llm_build_context {
 
         cur = ggml_mul_mat(ctx0, model.tok_embd, cur);
         cb(cur, "result_output", -1);
-
         ggml_build_forward_expand(gf, cur);
+
         return gf;
     }
 
@@ -5429,7 +5508,7 @@ struct llm_build_context {
                     model.layers[il].gpu_idx, 
                     model.layers[il].gpu_bucket, 
                     model.layers[il].ffn_gate_gpu, model.layers[il].ffn_down_gpu, model.layers[il].ffn_up_gpu,
-                    LLM_FFN_RELU, LLM_FFN_SEQ, model.layers[il].gpu_offload_ratio, cbs);
+                    LLM_FFN_RELU, LLM_FFN_SEQ, model.layers[il].gpu_offload_ratio, cbs, il);
             } else {
                 cb(attn_norm, "attn_norm", il);
                 cur = llm_build_ffn(ctx0, attn_norm, // !! use the attn norm, not the result
@@ -6410,6 +6489,9 @@ static struct ggml_cgraph * llama_build_graph(
      const llama_batch & batch) {
     const auto & model = lctx.model;
 
+    // clear stale entries from previous graph builds (e.g. measurement pass)
+    sparse_dump_idx_tensors.clear();
+
     // check if we should build the worst-case graph (for memory measurement)
     const bool worst_case = ggml_allocr_is_measure(lctx.alloc);
 
@@ -6925,6 +7007,41 @@ static int llama_decode_internal(
 #if GGML_USE_MPI
     ggml_mpi_graph_compute_post(lctx.ctx_mpi, gf, n_layer);
 #endif
+
+    // dump sparse selection (predictor output per layer) as JSONL
+    // also optionally dump raw float scores as binary
+    if (sparse_dump_fp != nullptr || sparse_dump_bin_fp != nullptr) {
+        for (auto & kv : sparse_dump_idx_tensors) {
+            int il = kv.first;
+            ggml_tensor * idx = kv.second;
+            float * data = (float *)idx->data;
+            int n_neurons = idx->ne[0];
+            int n_batch = idx->ne[1];
+            for (int b = 0; b < n_batch; b++) {
+                if (sparse_dump_fp) {
+                    std::vector<int> active;
+                    for (int i = 0; i < n_neurons; i++) {
+                        if (data[b * n_neurons + i] > 0.0f) active.push_back(i);
+                    }
+                    fprintf(sparse_dump_fp, "{\"token\":%d,\"layer\":%d,\"batch\":%d,\"total\":%d,\"active\":%d,\"indices\":[",
+                        sparse_dump_cur_token, il, b, n_neurons, (int)active.size());
+                    for (size_t a = 0; a < active.size(); a++) {
+                        fprintf(sparse_dump_fp, "%d%s", active[a], (a + 1 < active.size()) ? "," : "");
+                    }
+                    fprintf(sparse_dump_fp, "]}\n");
+                }
+                if (sparse_dump_bin_fp) {
+                    int32_t hdr[4] = {sparse_dump_cur_token, il, b, n_neurons};
+                    fwrite(hdr, sizeof(int32_t), 4, sparse_dump_bin_fp);
+                    fwrite(data + b * n_neurons, sizeof(float), n_neurons, sparse_dump_bin_fp);
+                }
+            }
+        }
+        sparse_dump_cur_token += n_tokens;
+        sparse_dump_idx_tensors.clear();
+        if (sparse_dump_fp) fflush(sparse_dump_fp);
+        if (sparse_dump_bin_fp) fflush(sparse_dump_bin_fp);
+    }
 
     // update the kv ring buffer
     {
@@ -9982,6 +10099,28 @@ struct llama_context * llama_new_context_with_model(
 #endif
         }
 
+        // auto-enable sparse dump via environment variable; done after the
+        // measurement pass so the (fake, discarded) warm-up graph build
+        // doesn't need per-layer dump buffers sized for the worst case
+        {
+            const char * dump_path = getenv("POWERINFER_DUMP_SPARSE");
+            if (dump_path && dump_path[0] != '\0') {
+                sparse_dump_fp = fopen(dump_path, "w");
+                if (sparse_dump_fp) {
+                    sparse_dump_cur_token = 0;
+                    sparse_dump_idx_tensors.clear();
+                    LLAMA_LOG_INFO("sparse dump auto-enabled, writing to %s\n", dump_path);
+                }
+            }
+            const char * dump_bin_path = getenv("POWERINFER_DUMP_BINARY");
+            if (dump_bin_path && dump_bin_path[0] != '\0') {
+                sparse_dump_bin_fp = fopen(dump_bin_path, "wb");
+                if (sparse_dump_bin_fp) {
+                    LLAMA_LOG_INFO("sparse binary dump enabled, writing to %s\n", dump_bin_path);
+                }
+            }
+        }
+
 #ifdef GGML_USE_METAL
         if (model->n_gpu_layers > 0) {
             // this allocates all Metal resources and memory buffers
@@ -10034,6 +10173,15 @@ struct llama_context * llama_new_context_with_model(
 }
 
 void llama_free(struct llama_context * ctx) {
+    // auto-close sparse dump if still open
+    if (sparse_dump_fp) {
+        fclose(sparse_dump_fp);
+        sparse_dump_fp = nullptr;
+    }
+    if (sparse_dump_bin_fp) {
+        fclose(sparse_dump_bin_fp);
+        sparse_dump_bin_fp = nullptr;
+    }
     delete ctx;
 }
 

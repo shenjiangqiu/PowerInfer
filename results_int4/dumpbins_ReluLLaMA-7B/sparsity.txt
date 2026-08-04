@@ -1,0 +1,5 @@
+layers=32
+threshold=0
+sparsity=0.7934
+activated=1659517551
+total=8032141312

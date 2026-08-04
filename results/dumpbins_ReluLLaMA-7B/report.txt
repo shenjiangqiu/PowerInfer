@@ -1,0 +1,3 @@
+records=729664
+up_async: naive=82903280 remap=78695872 ideal=32878784 speedup=1.053x remap/ideal=2.394x
+down_async: naive=82903280 remap=78695872 ideal=32878784 speedup=1.053x remap/ideal=2.394x

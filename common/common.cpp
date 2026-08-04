@@ -1007,6 +1007,8 @@ std::tuple<struct llama_model *, struct llama_context *> llama_init_from_gpt_par
         llama_decode(lctx, llama_batch_get_one(tmp.data(), std::min(tmp.size(), (size_t) params.n_batch), 0, 0));
         llama_kv_cache_clear(lctx);
         llama_reset_timings(lctx);
+        // discard the sparse dump entries produced by this dummy warm-up batch
+        llama_sparse_dump_reset();
     }
 
     return std::make_tuple(model, lctx);
